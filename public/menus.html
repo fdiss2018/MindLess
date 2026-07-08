@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Menus</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🍽️ Menus de la semaine</h1>
+    <p id="libelle-semaine"></p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour</a>
+
+    <div class="ligne-champs">
+      <button id="btn-semaine-precedente" class="btn-secondaire">← Semaine précédente</button>
+      <button id="btn-semaine-suivante" class="btn-secondaire">Semaine suivante →</button>
+    </div>
+
+    <a href="recettes.html" class="btn-secondaire btn-large">📚 Bibliothèque de recettes</a>
+
+    <div id="grille-planning"></div>
+
+    <div class="carte hidden" id="panneau-edition">
+      <p class="carte-titre" id="panneau-titre"></p>
+
+      <div class="ligne-champs" style="margin-bottom:12px">
+        <button id="btn-mode-texte" class="btn-secondaire">Texte libre</button>
+        <button id="btn-mode-recette" class="btn-secondaire">Recette</button>
+      </div>
+
+      <div class="champ" id="champ-texte">
+        <label for="input-texte">Nom du plat</label>
+        <input type="text" id="input-texte" class="input" placeholder="Ex. Pâtes bolognaise">
+      </div>
+
+      <div class="champ hidden" id="champ-recette">
+        <label for="select-recette">Recette</label>
+        <select id="select-recette" class="input"></select>
+      </div>
+
+      <button id="btn-enregistrer-creneau" class="btn-primaire btn-large">Enregistrer</button>
+      <div class="ligne-champs" style="margin-top:8px">
+        <button id="btn-effacer-creneau" class="btn-danger">Effacer</button>
+        <button id="btn-annuler-creneau" class="btn-secondaire">Annuler</button>
+      </div>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { RecetteService } from './services/RecetteService.js';
+    import { PlanningRepasService } from './services/PlanningRepasService.js';
+    import {
+      JOURS_SEMAINE, CRENEAUX_REPAS, getIdSemaine, getDatesSemaine, semaineSuivante, semainePrecedente,
+    } from './utils/DateSemaine.js';
+
+    const LABEL_JOUR = {
+      lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
+      vendredi: 'Vendredi', samedi: 'Samedi', dimanche: 'Dimanche',
+    };
+    const LABEL_CRENEAU = { midi: 'Midi', soir: 'Soir' };
+
+    let foyerIdCourant = null;
+    let idSemaineCourante = getIdSemaine(new Date());
+    let recettesParId = {};
+    let desabonnerPlanning = null;
+    let creneauEnEdition = null; // { jour, creneau }
+
+    const grille = document.getElementById('grille-planning');
+    const chargement = document.getElementById('chargement');
+    const panneau = document.getElementById('panneau-edition');
+    const selectRecette = document.getElementById('select-recette');
+
+    function afficherLibelleSemaine() {
+      const dates = getDatesSemaine(idSemaineCourante);
+      const format = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+      document.getElementById('libelle-semaine').textContent = `Du ${format(dates[0])} au ${format(dates[6])}`;
+    }
+
+    function dessinerGrille(planning) {
+      grille.innerHTML = '';
+      JOURS_SEMAINE.forEach((jour) => {
+        const blocJour = document.createElement('div');
+        blocJour.className = 'planning-jour';
+        blocJour.innerHTML = `<p class="planning-jour-titre">${LABEL_JOUR[jour]}</p>`;
+
+        const creneaux = document.createElement('div');
+        creneaux.className = 'planning-creneaux';
+
+        CRENEAUX_REPAS.forEach((creneau) => {
+          const valeur = planning.jours[jour][creneau];
+          const div = document.createElement('div');
+          const estVide = !valeur.texte && !valeur.recetteId;
+          div.className = 'planning-creneau' + (estVide ? ' vide' : '');
+          const contenu = valeur.recetteId
+            ? (recettesParId[valeur.recetteId]?.nom || 'Recette')
+            : (valeur.texte || 'Ajouter...');
+          div.innerHTML = `
+            <div class="creneau-label">${LABEL_CRENEAU[creneau]}</div>
+            <div class="creneau-contenu">${contenu}</div>
+          `;
+          div.addEventListener('click', () => ouvrirPanneau(jour, creneau, valeur));
+          creneaux.appendChild(div);
+        });
+
+        blocJour.appendChild(creneaux);
+        grille.appendChild(blocJour);
+      });
+    }
+
+    function basculerMode(mode) {
+      document.getElementById('champ-texte').classList.toggle('hidden', mode !== 'texte');
+      document.getElementById('champ-recette').classList.toggle('hidden', mode !== 'recette');
+    }
+
+    function ouvrirPanneau(jour, creneau, valeur) {
+      creneauEnEdition = { jour, creneau };
+      document.getElementById('panneau-titre').textContent = `${LABEL_JOUR[jour]} · ${LABEL_CRENEAU[creneau]}`;
+      document.getElementById('input-texte').value = valeur.texte || '';
+      selectRecette.value = valeur.recetteId || '';
+      basculerMode(valeur.recetteId ? 'recette' : 'texte');
+      panneau.classList.remove('hidden');
+      panneau.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function fermerPanneau() {
+      panneau.classList.add('hidden');
+      creneauEnEdition = null;
+    }
+
+    document.getElementById('btn-mode-texte').addEventListener('click', () => basculerMode('texte'));
+    document.getElementById('btn-mode-recette').addEventListener('click', () => basculerMode('recette'));
+    document.getElementById('btn-annuler-creneau').addEventListener('click', fermerPanneau);
+
+    document.getElementById('btn-enregistrer-creneau').addEventListener('click', async () => {
+      if (!creneauEnEdition) return;
+      const modeTexte = !document.getElementById('champ-texte').classList.contains('hidden');
+      const valeur = modeTexte
+        ? { texte: document.getElementById('input-texte').value.trim() || null, recetteId: null }
+        : { texte: null, recetteId: selectRecette.value || null };
+
+      await PlanningRepasService.mettreAJourCreneau(
+        foyerIdCourant, idSemaineCourante, creneauEnEdition.jour, creneauEnEdition.creneau, valeur,
+      );
+      fermerPanneau();
+    });
+
+    document.getElementById('btn-effacer-creneau').addEventListener('click', async () => {
+      if (!creneauEnEdition) return;
+      await PlanningRepasService.mettreAJourCreneau(
+        foyerIdCourant, idSemaineCourante, creneauEnEdition.jour, creneauEnEdition.creneau,
+        { texte: null, recetteId: null },
+      );
+      fermerPanneau();
+    });
+
+    function ecouterSemaineCourante() {
+      if (desabonnerPlanning) desabonnerPlanning();
+      afficherLibelleSemaine();
+      fermerPanneau();
+      desabonnerPlanning = PlanningRepasService.ecouterSemaine(foyerIdCourant, idSemaineCourante, (planning) => {
+        chargement.classList.add('hidden');
+        dessinerGrille(planning);
+      });
+    }
+
+    document.getElementById('btn-semaine-precedente').addEventListener('click', () => {
+      idSemaineCourante = semainePrecedente(idSemaineCourante);
+      ecouterSemaineCourante();
+    });
+
+    document.getElementById('btn-semaine-suivante').addEventListener('click', () => {
+      idSemaineCourante = semaineSuivante(idSemaineCourante);
+      ecouterSemaineCourante();
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+
+      const recettes = await RecetteService.listerRecettes(foyerIdCourant);
+      recettesParId = Object.fromEntries(recettes.map(r => [r.id, r]));
+      selectRecette.innerHTML = '<option value="">— Choisir une recette —</option>'
+        + recettes.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
+
+      ecouterSemaineCourante();
+    });
+  </script>
+
+</body>
+</html>

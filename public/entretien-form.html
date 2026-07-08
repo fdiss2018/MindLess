@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Entretien</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">🔧 Nouvel entretien</h1>
+  </header>
+
+  <main>
+    <a href="#" class="lien-retour" id="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <div class="champ">
+        <label for="type">Type d'entretien</label>
+        <select id="type" class="input"></select>
+      </div>
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="date">Date</label>
+          <input type="date" id="date" class="input">
+        </div>
+        <div class="champ">
+          <label for="kilometrage">Kilométrage</label>
+          <input type="number" id="kilometrage" class="input" min="0">
+        </div>
+      </div>
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="cout">Coût (€)</label>
+          <input type="number" id="cout" class="input" min="0" step="0.01">
+        </div>
+        <div class="champ">
+          <label for="garage">Garage</label>
+          <input type="text" id="garage" class="input" placeholder="Ex. Garage Dupont">
+        </div>
+      </div>
+      <div class="champ">
+        <label for="notes">Notes</label>
+        <textarea id="notes" class="input" rows="3"></textarea>
+      </div>
+
+      <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
+      <button id="btn-supprimer" class="btn-danger btn-large hidden" style="margin-top:8px">Supprimer</button>
+      <p id="msg" class="msg hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { VehiculeService } from './services/VehiculeService.js';
+    import { EntretienService } from './services/EntretienService.js';
+    import { Entretien } from './models/Entretien.js';
+    import { REGLES_ENTRETIEN } from './utils/ReglesEntretien.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const vehiculeId = params.get('vehiculeId');
+    const entretienId = params.get('id');
+
+    document.getElementById('lien-retour').href = `vehicule-detail.html?id=${vehiculeId}`;
+
+    const selectType = document.getElementById('type');
+    REGLES_ENTRETIEN.forEach((regle) => {
+      const option = document.createElement('option');
+      option.value = regle.type;
+      option.textContent = regle.label;
+      selectType.appendChild(option);
+    });
+
+    const titre = document.getElementById('titre');
+    const btnValider = document.getElementById('btn-valider');
+    const btnSupprimer = document.getElementById('btn-supprimer');
+    const msg = document.getElementById('msg');
+
+    let foyerIdCourant = null;
+
+    function afficherMsg(texte) {
+      msg.textContent = texte;
+      msg.className = 'msg msg-erreur';
+      msg.classList.remove('hidden');
+    }
+
+    async function chargerEntretien() {
+      const entretiens = await EntretienService.listerEntretiens(foyerIdCourant, vehiculeId);
+      const entretien = entretiens.find(e => e.id === entretienId);
+      if (!entretien) return;
+      titre.textContent = '🔧 Modifier l\'entretien';
+      selectType.value = entretien.type;
+      document.getElementById('date').value = entretien.date;
+      document.getElementById('kilometrage').value = entretien.kilometrage;
+      document.getElementById('cout').value = entretien.cout ?? '';
+      document.getElementById('garage').value = entretien.garage;
+      document.getElementById('notes').value = entretien.notes;
+      btnSupprimer.classList.remove('hidden');
+    }
+
+    btnValider.addEventListener('click', async () => {
+      const date = document.getElementById('date').value;
+      const kilometrage = Number(document.getElementById('kilometrage').value);
+      if (!date || !kilometrage) { afficherMsg('Renseigne au moins la date et le kilométrage.'); return; }
+
+      const donnees = {
+        type: selectType.value,
+        date,
+        kilometrage,
+        cout: document.getElementById('cout').value ? Number(document.getElementById('cout').value) : null,
+        garage: document.getElementById('garage').value.trim(),
+        notes: document.getElementById('notes').value.trim(),
+      };
+
+      btnValider.disabled = true;
+      try {
+        if (entretienId) {
+          await EntretienService.modifierEntretien(foyerIdCourant, vehiculeId, entretienId, donnees);
+        } else {
+          const utilisateur = AuthService.utilisateurActuel();
+          const entretien = new Entretien({
+            ...donnees, creePar: utilisateur.uid, dateCreation: new Date().toISOString(),
+          });
+          await EntretienService.ajouterEntretien(foyerIdCourant, vehiculeId, entretien);
+        }
+        window.location.href = `vehicule-detail.html?id=${vehiculeId}`;
+      } catch (err) {
+        afficherMsg(err.message || 'Une erreur est survenue.');
+        btnValider.disabled = false;
+      }
+    });
+
+    btnSupprimer.addEventListener('click', async () => {
+      if (!confirm('Supprimer cet entretien ?')) return;
+      await EntretienService.supprimerEntretien(foyerIdCourant, vehiculeId, entretienId);
+      window.location.href = `vehicule-detail.html?id=${vehiculeId}`;
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      if (entretienId) await chargerEntretien();
+    });
+  </script>
+
+</body>
+</html>

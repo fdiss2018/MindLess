@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Recettes</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>📚 Recettes</h1>
+    <p>La bibliothèque de recettes du foyer.</p>
+  </header>
+
+  <main>
+    <a href="menus.html" class="lien-retour">← Retour aux menus</a>
+
+    <a href="recette-form.html" class="btn-primaire btn-large">+ Ajouter une recette</a>
+
+    <div id="liste-recettes"></div>
+    <p id="vide" class="vide hidden">Aucune recette pour l'instant.</p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { RecetteService } from './services/RecetteService.js';
+
+    const liste = document.getElementById('liste-recettes');
+    const vide = document.getElementById('vide');
+    const chargement = document.getElementById('chargement');
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+
+      RecetteService.ecouterRecettes(utilisateur.foyerId, (recettes) => {
+        chargement.classList.add('hidden');
+        liste.innerHTML = '';
+        vide.classList.toggle('hidden', recettes.length > 0);
+
+        recettes.forEach((recette) => {
+          const lien = document.createElement('a');
+          lien.href = `recette-detail.html?id=${recette.id}`;
+          lien.className = 'carte';
+          lien.style.display = 'block';
+          lien.innerHTML = `
+            <p class="carte-titre">${recette.nom}</p>
+            <p class="carte-desc">${recette.portions} portions · ${recette.ingredients.length} ingrédients</p>
+          `;
+          liste.appendChild(lien);
+        });
+      });
+    });
+  </script>
+
+</body>
+</html>

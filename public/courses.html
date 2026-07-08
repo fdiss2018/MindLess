@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Courses</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🛒 Courses</h1>
+    <p>La liste de courses partagée du foyer.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <div class="ligne-champs">
+        <input type="text" id="input-nouvel-item" class="input" placeholder="Ajouter un article...">
+        <button id="btn-ajouter-item" class="btn-primaire">Ajouter</button>
+      </div>
+    </div>
+
+    <button id="btn-generer" class="btn-secondaire btn-large">🍽️ Générer depuis le planning de la semaine</button>
+    <p id="msg-generation" class="msg hidden"></p>
+
+    <div id="liste-courses"></div>
+    <p id="vide" class="vide hidden">Ta liste de courses est vide.</p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { ListeCoursesService } from './services/ListeCoursesService.js';
+    import { PlanningRepasService } from './services/PlanningRepasService.js';
+    import { RecetteService } from './services/RecetteService.js';
+    import { ListeCoursesItem } from './models/ListeCoursesItem.js';
+    import { genererItemsDepuisPlanning, fusionnerAvecListeExistante } from './utils/GenerateurListeCourses.js';
+    import { getIdSemaine } from './utils/DateSemaine.js';
+
+    let foyerIdCourant = null;
+    let itemsCourants = [];
+
+    const liste = document.getElementById('liste-courses');
+    const vide = document.getElementById('vide');
+    const chargement = document.getElementById('chargement');
+    const msgGeneration = document.getElementById('msg-generation');
+
+    function afficherMsgGeneration(texte, erreur = false) {
+      msgGeneration.textContent = texte;
+      msgGeneration.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msgGeneration.classList.remove('hidden');
+    }
+
+    function afficherListe(items) {
+      chargement.classList.add('hidden');
+      liste.innerHTML = '';
+      vide.classList.toggle('hidden', items.length > 0);
+
+      const parCategorie = new Map();
+      items.forEach((item) => {
+        const cle = item.categorie || 'Sans catégorie';
+        if (!parCategorie.has(cle)) parCategorie.set(cle, []);
+        parCategorie.get(cle).push(item);
+      });
+
+      parCategorie.forEach((itemsCategorie, categorie) => {
+        const titreCategorie = document.createElement('p');
+        titreCategorie.className = 'planning-jour-titre';
+        titreCategorie.textContent = categorie;
+        liste.appendChild(titreCategorie);
+
+        itemsCategorie.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'liste-item' + (item.coche ? ' coche' : '');
+          div.innerHTML = `
+            <span class="case ${item.coche ? 'coche' : ''}">${item.coche ? '✓' : ''}</span>
+            <div class="liste-item-info">
+              <p class="liste-item-nom">${item.nom}</p>
+              <p class="liste-item-detail">${item.quantite} ${item.unite}</p>
+            </div>
+            <button class="btn-danger btn-supprimer-item" style="padding:6px 10px">✕</button>
+          `;
+          div.querySelector('.case').addEventListener('click', () => {
+            ListeCoursesService.basculerCoche(foyerIdCourant, item.id, !item.coche);
+          });
+          div.querySelector('.btn-supprimer-item').addEventListener('click', () => {
+            ListeCoursesService.supprimerItem(foyerIdCourant, item.id);
+          });
+          liste.appendChild(div);
+        });
+      });
+    }
+
+    document.getElementById('btn-ajouter-item').addEventListener('click', async () => {
+      const input = document.getElementById('input-nouvel-item');
+      const nom = input.value.trim();
+      if (!nom) return;
+      const maintenant = new Date().toISOString();
+      await ListeCoursesService.ajouterItem(foyerIdCourant, new ListeCoursesItem({
+        nom, quantite: 1, unite: '', categorie: '', origine: 'manuel',
+        dateAjout: maintenant, dateMaj: maintenant,
+      }));
+      input.value = '';
+    });
+
+    document.getElementById('btn-generer').addEventListener('click', async () => {
+      msgGeneration.classList.add('hidden');
+      try {
+        const idSemaine = getIdSemaine(new Date());
+        const planning = await PlanningRepasService.obtenirOuCreerSemaine(foyerIdCourant, idSemaine);
+        const idsRecettes = Object.values(planning.jours)
+          .flatMap(jour => Object.values(jour))
+          .map(creneau => creneau.recetteId)
+          .filter(Boolean);
+
+        if (idsRecettes.length === 0) {
+          afficherMsgGeneration('Aucune recette planifiée cette semaine — rien à générer.');
+          return;
+        }
+
+        const recettesParId = await RecetteService.obtenirRecettesParIds(foyerIdCourant, idsRecettes);
+        const itemsGeneres = genererItemsDepuisPlanning(planning, recettesParId);
+        const { itemsACreer, itemsAModifier } = fusionnerAvecListeExistante(itemsGeneres, itemsCourants);
+
+        if (itemsACreer.length === 0 && itemsAModifier.length === 0) {
+          afficherMsgGeneration('La liste de courses est déjà à jour par rapport au planning.');
+          return;
+        }
+
+        await ListeCoursesService.ecrireLot(foyerIdCourant, itemsACreer, itemsAModifier);
+        afficherMsgGeneration(`${itemsACreer.length} article(s) ajouté(s), ${itemsAModifier.length} mis à jour.`);
+      } catch (err) {
+        afficherMsgGeneration(err.message || 'Une erreur est survenue.', true);
+      }
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+
+      ListeCoursesService.ecouterListe(foyerIdCourant, (items) => {
+        itemsCourants = items;
+        afficherListe(items);
+      });
+    });
+  </script>
+
+</body>
+</html>

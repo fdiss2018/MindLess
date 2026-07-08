@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Recette</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">📚 Nouvelle recette</h1>
+  </header>
+
+  <main>
+    <a href="recettes.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <div class="champ">
+        <label for="nom">Nom de la recette</label>
+        <input type="text" id="nom" class="input" placeholder="Ex. Poulet rôti aux légumes">
+      </div>
+      <div class="champ">
+        <label for="portions">Nombre de portions</label>
+        <input type="number" id="portions" class="input" min="1" value="4">
+      </div>
+
+      <label>Ingrédients</label>
+      <div id="liste-ingredients"></div>
+      <button id="btn-ajouter-ingredient" class="btn-secondaire" style="margin-bottom:14px">+ Ajouter un ingrédient</button>
+
+      <div class="champ">
+        <label for="instructions">Instructions</label>
+        <textarea id="instructions" class="input" rows="5"></textarea>
+      </div>
+      <div class="champ">
+        <label for="tags">Tags (séparés par une virgule)</label>
+        <input type="text" id="tags" class="input" placeholder="Ex. rapide, végétarien">
+      </div>
+
+      <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
+      <button id="btn-supprimer" class="btn-danger btn-large hidden" style="margin-top:8px">Supprimer cette recette</button>
+      <p id="msg" class="msg hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { RecetteService } from './services/RecetteService.js';
+    import { Recette } from './models/Recette.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const recetteId = params.get('id');
+
+    const titre = document.getElementById('titre');
+    const listeIngredients = document.getElementById('liste-ingredients');
+    const btnValider = document.getElementById('btn-valider');
+    const btnSupprimer = document.getElementById('btn-supprimer');
+    const msg = document.getElementById('msg');
+
+    let foyerIdCourant = null;
+
+    function afficherMsg(texte) {
+      msg.textContent = texte;
+      msg.className = 'msg msg-erreur';
+      msg.classList.remove('hidden');
+    }
+
+    function ajouterLigneIngredient(ingredient = { nom: '', quantite: '', unite: '' }) {
+      const ligne = document.createElement('div');
+      ligne.className = 'ligne-champs';
+      ligne.style.marginBottom = '8px';
+      ligne.innerHTML = `
+        <input type="text" class="input ingredient-nom" placeholder="Ingrédient" value="${ingredient.nom}">
+        <input type="number" class="input ingredient-quantite" placeholder="Qté" style="max-width:90px" value="${ingredient.quantite}">
+        <input type="text" class="input ingredient-unite" placeholder="Unité" style="max-width:90px" value="${ingredient.unite}">
+        <button type="button" class="btn-danger btn-retirer-ingredient" style="padding:8px 12px">✕</button>
+      `;
+      ligne.querySelector('.btn-retirer-ingredient').addEventListener('click', () => ligne.remove());
+      listeIngredients.appendChild(ligne);
+    }
+
+    document.getElementById('btn-ajouter-ingredient').addEventListener('click', () => ajouterLigneIngredient());
+
+    function lireIngredients() {
+      return [...listeIngredients.children]
+        .map((ligne) => ({
+          nom: ligne.querySelector('.ingredient-nom').value.trim(),
+          quantite: Number(ligne.querySelector('.ingredient-quantite').value) || 0,
+          unite: ligne.querySelector('.ingredient-unite').value.trim(),
+        }))
+        .filter(i => i.nom);
+    }
+
+    async function chargerRecette() {
+      const recette = await RecetteService.obtenirRecette(foyerIdCourant, recetteId);
+      if (!recette) return;
+      titre.textContent = `📚 ${recette.nom}`;
+      document.getElementById('nom').value = recette.nom;
+      document.getElementById('portions').value = recette.portions;
+      document.getElementById('instructions').value = recette.instructions;
+      document.getElementById('tags').value = recette.tags.join(', ');
+      listeIngredients.innerHTML = '';
+      recette.ingredients.forEach(ajouterLigneIngredient);
+      btnSupprimer.classList.remove('hidden');
+    }
+
+    btnValider.addEventListener('click', async () => {
+      const nom = document.getElementById('nom').value.trim();
+      const ingredients = lireIngredients();
+      if (!nom) { afficherMsg('Renseigne un nom de recette.'); return; }
+      if (ingredients.length === 0) { afficherMsg('Ajoute au moins un ingrédient.'); return; }
+
+      const donnees = {
+        nom,
+        portions: Number(document.getElementById('portions').value) || 1,
+        ingredients,
+        instructions: document.getElementById('instructions').value.trim(),
+        tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(Boolean),
+      };
+
+      btnValider.disabled = true;
+      try {
+        if (recetteId) {
+          await RecetteService.modifierRecette(foyerIdCourant, recetteId, donnees);
+          window.location.href = `recette-detail.html?id=${recetteId}`;
+        } else {
+          const utilisateur = AuthService.utilisateurActuel();
+          const recette = new Recette({
+            ...donnees, creePar: utilisateur.uid, dateCreation: new Date().toISOString(),
+          });
+          const id = await RecetteService.ajouterRecette(foyerIdCourant, recette);
+          window.location.href = `recette-detail.html?id=${id}`;
+        }
+      } catch (err) {
+        afficherMsg(err.message || 'Une erreur est survenue.');
+        btnValider.disabled = false;
+      }
+    });
+
+    btnSupprimer.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement cette recette ?')) return;
+      await RecetteService.supprimerRecette(foyerIdCourant, recetteId);
+      window.location.href = 'recettes.html';
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      if (recetteId) {
+        await chargerRecette();
+      } else {
+        ajouterLigneIngredient();
+      }
+    });
+  </script>
+
+</body>
+</html>

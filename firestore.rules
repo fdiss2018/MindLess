@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Un utilisateur est membre du foyer si son uid figure dans foyers/{foyerId}.membres
+    function estMembreDuFoyer(foyerId) {
+      return request.auth != null &&
+        request.auth.uid in
+          get(/databases/$(database)/documents/foyers/$(foyerId)).data.membres;
+    }
+
+    // Autorise un non-membre à rejoindre un foyer : uniquement l'ajout de son propre
+    // uid au tableau membres, aucune autre modification du document.
+    function estAdhesionValide() {
+      let avant = resource.data.membres;
+      let apres = request.resource.data.membres;
+      return request.auth != null
+        && apres.size() == avant.size() + 1
+        && apres.hasAll(avant)
+        && apres.hasOnly(avant.concat([request.auth.uid]))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['membres']);
+    }
+
+    // Profil utilisateur : chacun ne lit/écrit que le sien
+    match /utilisateurs/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /foyers/{foyerId} {
+      // Créer un foyer : uniquement soi-même comme premier membre
+      allow create: if request.auth != null
+        && request.resource.data.membres.size() == 1
+        && request.resource.data.membres[0] == request.auth.uid;
+
+      // Lecture ouverte à tout utilisateur connecté : nécessaire pour vérifier
+      // qu'un code d'invitation existe avant de rejoindre un foyer (on n'est pas
+      // encore membre à ce moment-là). Seules les sous-collections restent
+      // restreintes aux membres (voir plus bas).
+      allow read: if request.auth != null;
+      allow update: if estMembreDuFoyer(foyerId) || estAdhesionValide();
+      allow delete: if false;
+
+      // Toutes les sous-collections du foyer (véhicules, entretiens, recettes,
+      // planning repas, liste de courses) héritent de la même règle d'appartenance.
+      match /{document=**} {
+        allow read, write: if estMembreDuFoyer(foyerId);
+      }
+    }
+  }
+}

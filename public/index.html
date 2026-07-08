@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🧘 MindLess</h1>
+    <p>Libère ta charge mentale du quotidien.</p>
+  </header>
+
+  <main>
+    <div class="nav-accueil">
+      <a href="voiture.html" class="nav-tuile">
+        <span class="icone">🚗</span>
+        <span class="titre">Voiture</span>
+        <span class="tuile-badge hidden" id="badge-voiture"></span>
+      </a>
+      <a href="courses.html" class="nav-tuile">
+        <span class="icone">🛒</span>
+        <span class="titre">Courses</span>
+      </a>
+      <a href="menus.html" class="nav-tuile">
+        <span class="icone">🍽️</span>
+        <span class="titre">Menus</span>
+      </a>
+      <a href="foyer.html" class="nav-tuile">
+        <span class="icone">🏠</span>
+        <span class="titre">Mon foyer</span>
+      </a>
+    </div>
+
+    <p style="text-align:center">
+      <a href="#" id="btn-deconnexion">Se déconnecter</a>
+    </p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { VehiculeService } from './services/VehiculeService.js';
+    import { EntretienService } from './services/EntretienService.js';
+    import { calculerRappels } from './utils/RappelsEntretien.js';
+
+    document.getElementById('btn-deconnexion').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await AuthService.seDeconnecter();
+    });
+
+    async function afficherBadgeRappels(foyerId) {
+      const vehicules = await VehiculeService.listerVehicules(foyerId);
+      let total = 0;
+      for (const vehicule of vehicules) {
+        const entretiens = await EntretienService.listerEntretiens(foyerId, vehicule.id);
+        const rappels = calculerRappels(vehicule, entretiens, new Date());
+        total += rappels.filter(r => r.statut === 'du' || r.statut === 'proche').length;
+      }
+      const badge = document.getElementById('badge-voiture');
+      if (total > 0) {
+        badge.textContent = total;
+        badge.classList.remove('hidden');
+      }
+    }
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      afficherBadgeRappels(utilisateur.foyerId).catch(() => {});
+    });
+  </script>
+
+</body>
+</html>

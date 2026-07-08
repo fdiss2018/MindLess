@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Voiture</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🚗 Voiture</h1>
+    <p>Carnet d'entretien et rappels de tes véhicules.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour</a>
+
+    <a href="vehicule-form.html" class="btn-primaire btn-large">+ Ajouter un véhicule</a>
+
+    <div id="liste-vehicules"></div>
+    <p id="vide" class="vide hidden">Aucun véhicule pour l'instant.</p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { VehiculeService } from './services/VehiculeService.js';
+    import { EntretienService } from './services/EntretienService.js';
+    import { calculerRappels } from './utils/RappelsEntretien.js';
+
+    const liste = document.getElementById('liste-vehicules');
+    const vide = document.getElementById('vide');
+    const chargement = document.getElementById('chargement');
+
+    function badgeStatutGlobal(rappels) {
+      if (rappels.some(r => r.statut === 'du')) return { classe: 'badge-rouge', texte: 'À faire' };
+      if (rappels.some(r => r.statut === 'proche')) return { classe: 'badge-jaune', texte: 'Bientôt' };
+      return { classe: 'badge-vert', texte: 'À jour' };
+    }
+
+    async function afficherVehicules(foyerId) {
+      const vehicules = await VehiculeService.listerVehicules(foyerId);
+      chargement.classList.add('hidden');
+
+      if (vehicules.length === 0) {
+        vide.classList.remove('hidden');
+        return;
+      }
+
+      for (const vehicule of vehicules) {
+        const entretiens = await EntretienService.listerEntretiens(foyerId, vehicule.id);
+        const rappels = calculerRappels(vehicule, entretiens, new Date());
+        const badge = badgeStatutGlobal(rappels);
+
+        const lien = document.createElement('a');
+        lien.href = `vehicule-detail.html?id=${vehicule.id}`;
+        lien.className = 'carte';
+        lien.style.display = 'block';
+        lien.innerHTML = `
+          <p class="carte-titre">${vehicule.nom} <span class="badge ${badge.classe}">${badge.texte}</span></p>
+          <p class="carte-desc">${vehicule.marque} ${vehicule.modele} · ${vehicule.kilometrageActuel.toLocaleString('fr-FR')} km</p>
+        `;
+        liste.appendChild(lien);
+      }
+    }
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      afficherVehicules(utilisateur.foyerId);
+    });
+  </script>
+
+</body>
+</html>

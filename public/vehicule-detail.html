@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Détail véhicule</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">🚗 Véhicule</h1>
+    <p id="sous-titre"></p>
+  </header>
+
+  <main>
+    <a href="voiture.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <p class="carte-titre">Rappels d'entretien</p>
+      <div id="liste-rappels"></div>
+      <a id="lien-modifier-vehicule" href="#" class="btn-secondaire" style="margin-top:10px">Modifier le véhicule</a>
+    </div>
+
+    <div class="carte">
+      <p class="carte-titre">Historique des entretiens</p>
+      <a id="lien-ajouter-entretien" href="#" class="btn-primaire btn-large">+ Ajouter un entretien</a>
+      <div id="liste-entretiens" style="margin-top:12px"></div>
+      <p id="vide-entretiens" class="vide hidden">Aucun entretien enregistré.</p>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { VehiculeService } from './services/VehiculeService.js';
+    import { EntretienService } from './services/EntretienService.js';
+    import { calculerRappels } from './utils/RappelsEntretien.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const vehiculeId = params.get('id');
+
+    document.getElementById('lien-modifier-vehicule').href = `vehicule-form.html?id=${vehiculeId}`;
+    document.getElementById('lien-ajouter-entretien').href = `entretien-form.html?vehiculeId=${vehiculeId}`;
+
+    const listeRappels = document.getElementById('liste-rappels');
+    const listeEntretiens = document.getElementById('liste-entretiens');
+    const videEntretiens = document.getElementById('vide-entretiens');
+    const chargement = document.getElementById('chargement');
+
+    const BADGE_PAR_STATUT = {
+      du: { classe: 'badge-rouge', texte: 'À faire' },
+      proche: { classe: 'badge-jaune', texte: 'Bientôt' },
+      ok: { classe: 'badge-vert', texte: 'OK' },
+      inconnu: { classe: 'badge-gris', texte: 'Pas d\'historique' },
+    };
+
+    function texteEcheance(rappel) {
+      const parties = [];
+      if (rappel.kmRestants !== null) {
+        parties.push(rappel.kmRestants > 0 ? `${rappel.kmRestants.toLocaleString('fr-FR')} km restants` : 'dépassé (km)');
+      }
+      if (rappel.joursRestants !== null) {
+        parties.push(rappel.joursRestants > 0 ? `${rappel.joursRestants} jours restants` : 'dépassé (date)');
+      }
+      return parties.join(' · ') || 'Ajoute un premier entretien de ce type';
+    }
+
+    function afficherRappels(vehicule, entretiens) {
+      const rappels = calculerRappels(vehicule, entretiens, new Date());
+      listeRappels.innerHTML = '';
+      rappels.forEach((rappel) => {
+        const badge = BADGE_PAR_STATUT[rappel.statut];
+        const div = document.createElement('div');
+        div.className = 'liste-item';
+        div.innerHTML = `
+          <div class="liste-item-info">
+            <p class="liste-item-nom">${rappel.label}</p>
+            <p class="liste-item-detail">${texteEcheance(rappel)}</p>
+          </div>
+          <span class="badge ${badge.classe}">${badge.texte}</span>
+        `;
+        listeRappels.appendChild(div);
+      });
+    }
+
+    function afficherEntretiens(entretiens) {
+      listeEntretiens.innerHTML = '';
+      if (entretiens.length === 0) {
+        videEntretiens.classList.remove('hidden');
+        return;
+      }
+      entretiens.forEach((entretien) => {
+        const lien = document.createElement('a');
+        lien.href = `entretien-form.html?vehiculeId=${vehiculeId}&id=${entretien.id}`;
+        lien.className = 'liste-item';
+        lien.style.textDecoration = 'none';
+        lien.innerHTML = `
+          <div class="liste-item-info">
+            <p class="liste-item-nom">${entretien.type}</p>
+            <p class="liste-item-detail">${entretien.date} · ${entretien.kilometrage.toLocaleString('fr-FR')} km${entretien.cout ? ` · ${entretien.cout} €` : ''}</p>
+          </div>
+        `;
+        listeEntretiens.appendChild(lien);
+      });
+    }
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+
+      const vehicule = await VehiculeService.obtenirVehicule(utilisateur.foyerId, vehiculeId);
+      if (!vehicule) { window.location.href = 'voiture.html'; return; }
+
+      document.getElementById('titre').textContent = `🚗 ${vehicule.nom}`;
+      document.getElementById('sous-titre').textContent =
+        `${vehicule.marque} ${vehicule.modele} · ${vehicule.kilometrageActuel.toLocaleString('fr-FR')} km`;
+
+      EntretienService.ecouterEntretiens(utilisateur.foyerId, vehiculeId, (entretiens) => {
+        chargement.classList.add('hidden');
+        afficherRappels(vehicule, entretiens);
+        afficherEntretiens(entretiens);
+      });
+    });
+  </script>
+
+</body>
+</html>

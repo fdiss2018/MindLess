@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Véhicule</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">🚗 Nouveau véhicule</h1>
+  </header>
+
+  <main>
+    <a href="voiture.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <div class="champ">
+        <label for="nom">Nom du véhicule</label>
+        <input type="text" id="nom" class="input" placeholder="Ex. Voiture de Paul">
+      </div>
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="marque">Marque</label>
+          <input type="text" id="marque" class="input" placeholder="Ex. Renault">
+        </div>
+        <div class="champ">
+          <label for="modele">Modèle</label>
+          <input type="text" id="modele" class="input" placeholder="Ex. Clio">
+        </div>
+      </div>
+      <div class="champ">
+        <label for="immatriculation">Immatriculation</label>
+        <input type="text" id="immatriculation" class="input" placeholder="AA-123-BB">
+      </div>
+      <div class="champ">
+        <label for="kilometrage">Kilométrage actuel</label>
+        <input type="number" id="kilometrage" class="input" min="0" placeholder="Ex. 45000">
+      </div>
+
+      <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
+      <button id="btn-supprimer" class="btn-danger btn-large hidden" style="margin-top:8px">Supprimer ce véhicule</button>
+      <p id="msg" class="msg hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './services/AuthService.js';
+    import { UtilisateurService } from './services/UtilisateurService.js';
+    import { VehiculeService } from './services/VehiculeService.js';
+    import { Vehicule } from './models/Vehicule.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const vehiculeId = params.get('id');
+
+    const titre = document.getElementById('titre');
+    const btnValider = document.getElementById('btn-valider');
+    const btnSupprimer = document.getElementById('btn-supprimer');
+    const msg = document.getElementById('msg');
+
+    let foyerIdCourant = null;
+
+    function afficherMsg(texte) {
+      msg.textContent = texte;
+      msg.className = 'msg msg-erreur';
+      msg.classList.remove('hidden');
+    }
+
+    async function chargerVehicule() {
+      const vehicule = await VehiculeService.obtenirVehicule(foyerIdCourant, vehiculeId);
+      if (!vehicule) return;
+      titre.textContent = `🚗 ${vehicule.nom}`;
+      document.getElementById('nom').value = vehicule.nom;
+      document.getElementById('marque').value = vehicule.marque;
+      document.getElementById('modele').value = vehicule.modele;
+      document.getElementById('immatriculation').value = vehicule.immatriculation;
+      document.getElementById('kilometrage').value = vehicule.kilometrageActuel;
+      btnSupprimer.classList.remove('hidden');
+    }
+
+    btnValider.addEventListener('click', async () => {
+      const nom = document.getElementById('nom').value.trim();
+      if (!nom) { afficherMsg('Renseigne un nom pour le véhicule.'); return; }
+
+      const donnees = {
+        nom,
+        marque: document.getElementById('marque').value.trim(),
+        modele: document.getElementById('modele').value.trim(),
+        immatriculation: document.getElementById('immatriculation').value.trim(),
+        kilometrageActuel: Number(document.getElementById('kilometrage').value) || 0,
+        dateMajKilometrage: new Date().toISOString(),
+      };
+
+      btnValider.disabled = true;
+      try {
+        if (vehiculeId) {
+          await VehiculeService.modifierVehicule(foyerIdCourant, vehiculeId, donnees);
+          window.location.href = `vehicule-detail.html?id=${vehiculeId}`;
+        } else {
+          const utilisateur = AuthService.utilisateurActuel();
+          const vehicule = new Vehicule({
+            ...donnees, creePar: utilisateur.uid, dateCreation: new Date().toISOString(),
+          });
+          const id = await VehiculeService.ajouterVehicule(foyerIdCourant, vehicule);
+          window.location.href = `vehicule-detail.html?id=${id}`;
+        }
+      } catch (err) {
+        afficherMsg(err.message || 'Une erreur est survenue.');
+        btnValider.disabled = false;
+      }
+    });
+
+    btnSupprimer.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement ce véhicule et son historique ?')) return;
+      await VehiculeService.supprimerVehicule(foyerIdCourant, vehiculeId);
+      window.location.href = 'voiture.html';
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      if (vehiculeId) await chargerVehicule();
+    });
+  </script>
+
+</body>
+</html>
