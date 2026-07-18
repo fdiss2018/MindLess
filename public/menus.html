@@ -23,8 +23,14 @@
     </div>
 
     <a href="recettes.html" class="btn-secondaire btn-large">📚 Bibliothèque de recettes</a>
+    <a href="profil-nutritionnel.html" class="btn-secondaire btn-large">🥗 Mon profil nutritionnel</a>
 
     <div id="grille-planning"></div>
+
+    <div class="carte" id="carte-bilan">
+      <p class="carte-titre">Bilan nutritionnel de la semaine</p>
+      <div id="bilan-nutritionnel"></div>
+    </div>
 
     <div class="carte hidden" id="panneau-edition">
       <p class="carte-titre" id="panneau-titre"></p>
@@ -55,19 +61,25 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { RecetteService } from './services/RecetteService.js';
-    import { PlanningRepasService } from './services/PlanningRepasService.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { RecetteService } from './menus/services/RecetteService.js';
+    import { PlanningRepasService } from './menus/services/PlanningRepasService.js';
+    import { NutritionService } from './menus/services/NutritionService.js';
     import {
       JOURS_SEMAINE, CRENEAUX_REPAS, getIdSemaine, getDatesSemaine, semaineSuivante, semainePrecedente,
-    } from './utils/DateSemaine.js';
+    } from './menus/utils/DateSemaine.js';
 
     const LABEL_JOUR = {
       lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
       vendredi: 'Vendredi', samedi: 'Samedi', dimanche: 'Dimanche',
     };
     const LABEL_CRENEAU = { midi: 'Midi', soir: 'Soir' };
+    const LABEL_GROUPE = {
+      legumes: 'Légumes', fruits: 'Fruits', feculents: 'Féculents',
+      legumineuses: 'Légumineuses', proteinesAnimales: 'Protéines animales',
+      produitsLaitiers: 'Produits laitiers',
+    };
 
     let foyerIdCourant = null;
     let idSemaineCourante = getIdSemaine(new Date());
@@ -117,6 +129,32 @@
       });
     }
 
+    async function afficherBilan() {
+      const zoneBilan = document.getElementById('bilan-nutritionnel');
+      try {
+        const bilan = await NutritionService.obtenirBilanSemaine(foyerIdCourant, idSemaineCourante);
+
+        if (bilan.bilansParMembre.length === 0) {
+          zoneBilan.innerHTML = '<p class="vide">Renseigne ton profil nutritionnel pour voir ton bilan.</p>';
+          return;
+        }
+
+        zoneBilan.innerHTML = bilan.bilansParMembre.map((membre) => `
+          <p class="carte-desc"><strong>${membre.nomAffiche}</strong></p>
+          <ul class="liste-bilan">
+            ${membre.comparaison.map((ligne) => `
+              <li>${ligne.couvert ? '✅' : '⚠️'} ${LABEL_GROUPE[ligne.groupe]} : ${ligne.reel}/${ligne.cible} portions</li>
+            `).join('')}
+          </ul>
+        `).join('')
+          + (bilan.repasNonEvalues > 0
+            ? `<p class="carte-desc">${bilan.repasNonEvalues} repas en texte libre non pris en compte dans ce bilan.</p>`
+            : '');
+      } catch (err) {
+        zoneBilan.innerHTML = `<p class="msg msg-erreur">${err.message || 'Bilan indisponible.'}</p>`;
+      }
+    }
+
     function basculerMode(mode) {
       document.getElementById('champ-texte').classList.toggle('hidden', mode !== 'texte');
       document.getElementById('champ-recette').classList.toggle('hidden', mode !== 'recette');
@@ -152,6 +190,7 @@
         foyerIdCourant, idSemaineCourante, creneauEnEdition.jour, creneauEnEdition.creneau, valeur,
       );
       fermerPanneau();
+      afficherBilan();
     });
 
     document.getElementById('btn-effacer-creneau').addEventListener('click', async () => {
@@ -161,6 +200,7 @@
         { texte: null, recetteId: null },
       );
       fermerPanneau();
+      afficherBilan();
     });
 
     function ecouterSemaineCourante() {
@@ -171,6 +211,7 @@
         chargement.classList.add('hidden');
         dessinerGrille(planning);
       });
+      afficherBilan();
     }
 
     document.getElementById('btn-semaine-precedente').addEventListener('click', () => {

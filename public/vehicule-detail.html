@@ -34,11 +34,11 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { VehiculeService } from './services/VehiculeService.js';
-    import { EntretienService } from './services/EntretienService.js';
-    import { calculerRappels } from './utils/RappelsEntretien.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { VehiculeService } from './voiture/services/VehiculeService.js';
+    import { EntretienService } from './voiture/services/EntretienService.js';
+    import { calculerRappels } from './voiture/utils/RappelsEntretien.js';
 
     const params = new URLSearchParams(window.location.search);
     const vehiculeId = params.get('id');
@@ -120,11 +120,10 @@
       document.getElementById('sous-titre').textContent =
         `${vehicule.marque} ${vehicule.modele} · ${vehicule.kilometrageActuel.toLocaleString('fr-FR')} km`;
 
-      EntretienService.ecouterEntretiens(utilisateur.foyerId, vehiculeId, (entretiens) => {
-        chargement.classList.add('hidden');
-        afficherRappels(vehicule, entretiens);
-        afficherEntretiens(entretiens);
-      });
+      const entretiens = await EntretienService.listerEntretiens(utilisateur.foyerId, vehiculeId);
+      chargement.classList.add('hidden');
+      afficherRappels(vehicule, entretiens);
+      afficherEntretiens(entretiens);
     });
   </script>
 

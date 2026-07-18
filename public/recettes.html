@@ -25,9 +25,9 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { RecetteService } from './services/RecetteService.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { RecetteService } from './menus/services/RecetteService.js';
 
     const liste = document.getElementById('liste-recettes');
     const vide = document.getElementById('vide');
@@ -38,22 +38,21 @@
       const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
       if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
 
-      RecetteService.ecouterRecettes(utilisateur.foyerId, (recettes) => {
-        chargement.classList.add('hidden');
-        liste.innerHTML = '';
-        vide.classList.toggle('hidden', recettes.length > 0);
+      const recettes = await RecetteService.listerRecettes(utilisateur.foyerId);
+      chargement.classList.add('hidden');
+      liste.innerHTML = '';
+      vide.classList.toggle('hidden', recettes.length > 0);
 
-        recettes.forEach((recette) => {
-          const lien = document.createElement('a');
-          lien.href = `recette-detail.html?id=${recette.id}`;
-          lien.className = 'carte';
-          lien.style.display = 'block';
-          lien.innerHTML = `
-            <p class="carte-titre">${recette.nom}</p>
-            <p class="carte-desc">${recette.portions} portions · ${recette.ingredients.length} ingrédients</p>
-          `;
-          liste.appendChild(lien);
-        });
+      recettes.forEach((recette) => {
+        const lien = document.createElement('a');
+        lien.href = `recette-detail.html?id=${recette.id}`;
+        lien.className = 'carte';
+        lien.style.display = 'block';
+        lien.innerHTML = `
+          <p class="carte-titre">${recette.nom}</p>
+          <p class="carte-desc">${recette.portions} portions · ${recette.ingredients.length} ingrédients</p>
+        `;
+        liste.appendChild(lien);
       });
     });
   </script>

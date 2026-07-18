@@ -1,0 +1,553 @@
+{
+  "periode": {
+    "debut": "2026-07-20",
+    "fin": "2026-08-02",
+    "nombreSemaines": 2,
+    "nombrePersonnes": 4
+  },
+  "produitsDeSaison": {
+    "legumes": [
+      "tomate", "courgette", "aubergine", "poivron", "concombre", "haricot vert",
+      "maïs doux", "fenouil", "oignon nouveau", "ail nouveau", "laitue", "radis",
+      "betterave", "blette", "basilic", "persil"
+    ],
+    "fruits": [
+      "pêche", "nectarine", "abricot", "prune", "mirabelle", "melon", "pastèque",
+      "framboise", "myrtille", "groseille", "figue"
+    ]
+  },
+  "fournisseurs": {
+    "biocoop": "Produits frais et périssables : fruits, légumes, viande, poisson, œufs, produits laitiers, pain",
+    "laFourche": "Épicerie sèche et vrac : féculents, légumineuses, huile, conserves, condiments"
+  },
+  "conseilsNutritionnels": {
+    "principe": "Sur chaque semaine : rotation des sources de protéines (poisson, volaille, légumineuses, œufs, viande rouge en quantité limitée), au moins 2 légumes différents par repas principal, un fruit de saison à chaque petit-déjeuner, féculents complets privilégiés (pâtes/riz/semoule complets, quinoa, boulgour)",
+    "repartitionProteinesParSemaine": {
+      "poisson": 2,
+      "volaille": 2,
+      "viandeRouge": 1,
+      "legumineuses": 2,
+      "oeufsEnPlatPrincipal": 2,
+      "vegetarienFromage": 1
+    }
+  },
+  "semaines": [
+    {
+      "numero": 1,
+      "jours": [
+        {
+          "jour": "Lundi",
+          "date": "2026-07-20",
+          "dejeuner": {
+            "nom": "Porridge flocons d'avoine, miel et pêche",
+            "tempsPreparation": "10 min",
+            "ingredients": [
+              { "nom": "flocons d'avoine", "quantite": "200 g", "source": "laFourche" },
+              { "nom": "lait", "quantite": "60 cl", "source": "biocoop" },
+              { "nom": "miel", "quantite": "4 c. à soupe", "source": "laFourche" },
+              { "nom": "pêches", "quantite": "4", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Poulet rôti, poêlée courgette-poivron, riz semi-complet",
+            "tempsPreparation": "35 min (dont cuisson au four)",
+            "ingredients": [
+              { "nom": "hauts de cuisse de poulet", "quantite": "8 pièces", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "3", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "2", "source": "biocoop" },
+              { "nom": "riz semi-complet", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "huile d'olive", "quantite": "3 c. à soupe", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Gaspacho et tartines de chèvre frais",
+            "tempsPreparation": "15 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "tomates", "quantite": "1 kg", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "poivron", "quantite": "1", "source": "biocoop" },
+              { "nom": "ail nouveau", "quantite": "1 gousse", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "fromage de chèvre frais", "quantite": "150 g", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Mardi",
+          "date": "2026-07-21",
+          "dejeuner": {
+            "nom": "Yaourts nature, granola et myrtilles",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "yaourts nature", "quantite": "4", "source": "biocoop" },
+              { "nom": "granola", "quantite": "160 g", "source": "laFourche" },
+              { "nom": "myrtilles", "quantite": "250 g", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Pâtes complètes, sauce tomate fraîche et basilic",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "pâtes complètes", "quantite": "360 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "1 kg", "source": "biocoop" },
+              { "nom": "basilic frais", "quantite": "1 botte", "source": "biocoop" },
+              { "nom": "ail nouveau", "quantite": "2 gousses", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" },
+              { "nom": "parmesan", "quantite": "80 g", "source": "biocoop" }
+            ]
+          },
+          "soir": {
+            "nom": "Poêlée de légumes d'été et œuf au plat",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "aubergines", "quantite": "2", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "2", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "2", "source": "biocoop" },
+              { "nom": "œufs", "quantite": "4", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          }
+        },
+        {
+          "jour": "Mercredi",
+          "date": "2026-07-22",
+          "dejeuner": {
+            "nom": "Tartines pain complet, confiture de prune et abricots",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "beurre", "quantite": "40 g", "source": "biocoop" },
+              { "nom": "confiture de prune", "quantite": "1 pot", "source": "laFourche" },
+              { "nom": "abricots", "quantite": "8", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Salade de lentilles, tomates, concombre et œuf dur",
+            "tempsPreparation": "20 min (cuisson lentilles incluse)",
+            "ingredients": [
+              { "nom": "lentilles vertes", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "1", "source": "biocoop" },
+              { "nom": "œufs", "quantite": "4", "source": "biocoop" },
+              { "nom": "vinaigrette (huile, vinaigre, moutarde)", "quantite": "4 c. à soupe", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Salade melon, jambon cru et mozzarella",
+            "tempsPreparation": "10 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "melon", "quantite": "1", "source": "biocoop" },
+              { "nom": "jambon cru", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "mozzarella", "quantite": "2 boules", "source": "biocoop" },
+              { "nom": "basilic frais", "quantite": "quelques feuilles", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Jeudi",
+          "date": "2026-07-23",
+          "dejeuner": {
+            "nom": "Fromage blanc, miel et framboises",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "fromage blanc", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "miel", "quantite": "4 c. à soupe", "source": "laFourche" },
+              { "nom": "framboises", "quantite": "250 g", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Filet de dorade poêlé, haricots verts et pommes de terre vapeur",
+            "tempsPreparation": "25 min",
+            "ingredients": [
+              { "nom": "filets de dorade", "quantite": "4", "source": "biocoop" },
+              { "nom": "haricots verts", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "pommes de terre nouvelles", "quantite": "800 g", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" },
+              { "nom": "citron", "quantite": "1", "source": "biocoop" }
+            ]
+          },
+          "soir": {
+            "nom": "Tarte fine tomates-moutarde et salade verte",
+            "tempsPreparation": "25 min (dont cuisson au four)",
+            "ingredients": [
+              { "nom": "pâte feuilletée", "quantite": "1 rouleau", "source": "biocoop" },
+              { "nom": "tomates", "quantite": "5", "source": "biocoop" },
+              { "nom": "moutarde", "quantite": "2 c. à soupe", "source": "laFourche" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Vendredi",
+          "date": "2026-07-24",
+          "dejeuner": {
+            "nom": "Smoothie pêche-banane et tartine complète",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "pêches", "quantite": "3", "source": "biocoop" },
+              { "nom": "bananes", "quantite": "2", "source": "biocoop" },
+              { "nom": "lait", "quantite": "40 cl", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Curry de pois chiches, courgettes et aubergines, riz basmati",
+            "tempsPreparation": "25 min",
+            "ingredients": [
+              { "nom": "pois chiches cuits", "quantite": "480 g", "source": "laFourche" },
+              { "nom": "courgettes", "quantite": "2", "source": "biocoop" },
+              { "nom": "aubergines", "quantite": "2", "source": "biocoop" },
+              { "nom": "lait de coco", "quantite": "40 cl", "source": "laFourche" },
+              { "nom": "pâte de curry", "quantite": "2 c. à soupe", "source": "laFourche" },
+              { "nom": "riz basmati", "quantite": "300 g", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Omelette aux fines herbes et salade verte",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "œufs", "quantite": "8", "source": "biocoop" },
+              { "nom": "persil", "quantite": "1 botte", "source": "biocoop" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          }
+        },
+        {
+          "jour": "Samedi",
+          "date": "2026-07-25",
+          "dejeuner": {
+            "nom": "Œufs brouillés, tomates cerises et pain complet",
+            "tempsPreparation": "10 min",
+            "ingredients": [
+              { "nom": "œufs", "quantite": "8", "source": "biocoop" },
+              { "nom": "tomates cerises", "quantite": "250 g", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "beurre", "quantite": "20 g", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Steak haché, poêlée poivron-maïs, semoule",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "steaks hachés", "quantite": "4", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "2", "source": "biocoop" },
+              { "nom": "maïs doux", "quantite": "2 épis", "source": "biocoop" },
+              { "nom": "semoule complète", "quantite": "300 g", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Salade de pâtes froides, tomates, mozzarella et basilic",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "pâtes complètes", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "mozzarella", "quantite": "2 boules", "source": "biocoop" },
+              { "nom": "basilic frais", "quantite": "1 botte", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          }
+        },
+        {
+          "jour": "Dimanche",
+          "date": "2026-07-26",
+          "dejeuner": {
+            "nom": "Muesli, lait et nectarine",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "muesli", "quantite": "200 g", "source": "laFourche" },
+              { "nom": "lait", "quantite": "60 cl", "source": "biocoop" },
+              { "nom": "nectarines", "quantite": "4", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Brochettes de poulet mariné, ratatouille express, boulgour",
+            "tempsPreparation": "30 min",
+            "ingredients": [
+              { "nom": "blancs de poulet", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "2", "source": "biocoop" },
+              { "nom": "aubergines", "quantite": "2", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "2", "source": "biocoop" },
+              { "nom": "tomates", "quantite": "3", "source": "biocoop" },
+              { "nom": "boulgour", "quantite": "300 g", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Assiette de crudités, houmous et pain",
+            "tempsPreparation": "10 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "radis", "quantite": "1 botte", "source": "biocoop" },
+              { "nom": "houmous", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "numero": 2,
+      "jours": [
+        {
+          "jour": "Lundi",
+          "date": "2026-07-27",
+          "dejeuner": {
+            "nom": "Yaourts nature, granola et abricots",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "yaourts nature", "quantite": "4", "source": "biocoop" },
+              { "nom": "granola", "quantite": "160 g", "source": "laFourche" },
+              { "nom": "abricots", "quantite": "8", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Wok de poulet et légumes d'été, nouilles",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "blancs de poulet", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "2", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "2", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "2", "source": "biocoop" },
+              { "nom": "nouilles de blé", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "sauce soja", "quantite": "3 c. à soupe", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Soupe froide concombre-yaourt et œuf mimosa",
+            "tempsPreparation": "15 min (sans cuisson pour la soupe)",
+            "ingredients": [
+              { "nom": "concombre", "quantite": "2", "source": "biocoop" },
+              { "nom": "yaourt nature", "quantite": "4", "source": "biocoop" },
+              { "nom": "ail nouveau", "quantite": "1 gousse", "source": "biocoop" },
+              { "nom": "œufs", "quantite": "4", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Mardi",
+          "date": "2026-07-28",
+          "dejeuner": {
+            "nom": "Porridge flocons d'avoine, miel et prunes",
+            "tempsPreparation": "10 min",
+            "ingredients": [
+              { "nom": "flocons d'avoine", "quantite": "200 g", "source": "laFourche" },
+              { "nom": "lait", "quantite": "60 cl", "source": "biocoop" },
+              { "nom": "miel", "quantite": "4 c. à soupe", "source": "laFourche" },
+              { "nom": "prunes", "quantite": "8", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Salade de thon façon niçoise (haricots verts, tomates, œuf, pomme de terre)",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "thon au naturel", "quantite": "2 boîtes", "source": "laFourche" },
+              { "nom": "haricots verts", "quantite": "400 g", "source": "biocoop" },
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "œufs", "quantite": "4", "source": "biocoop" },
+              { "nom": "pommes de terre nouvelles", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "olives", "quantite": "100 g", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Taboulé de semoule et feta",
+            "tempsPreparation": "15 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "semoule complète", "quantite": "250 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "persil", "quantite": "1 botte", "source": "biocoop" },
+              { "nom": "feta", "quantite": "200 g", "source": "biocoop" },
+              { "nom": "citron", "quantite": "1", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Mercredi",
+          "date": "2026-07-29",
+          "dejeuner": {
+            "nom": "Tartines pain complet, confiture d'abricot et fruits frais",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "beurre", "quantite": "40 g", "source": "biocoop" },
+              { "nom": "confiture d'abricot", "quantite": "1 pot", "source": "laFourche" },
+              { "nom": "prunes", "quantite": "6", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Chili sin carne (haricots rouges) et riz",
+            "tempsPreparation": "25 min",
+            "ingredients": [
+              { "nom": "haricots rouges cuits", "quantite": "480 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "2", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "2", "source": "biocoop" },
+              { "nom": "épices chili", "quantite": "1 c. à soupe", "source": "laFourche" },
+              { "nom": "riz semi-complet", "quantite": "300 g", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Soupe froide de courgettes et croûtons",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "courgettes", "quantite": "5", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "1", "source": "biocoop" },
+              { "nom": "fromage blanc", "quantite": "200 g", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "4 tranches", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          }
+        },
+        {
+          "jour": "Jeudi",
+          "date": "2026-07-30",
+          "dejeuner": {
+            "nom": "Fromage blanc, miel et myrtilles",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "fromage blanc", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "miel", "quantite": "4 c. à soupe", "source": "laFourche" },
+              { "nom": "myrtilles", "quantite": "250 g", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Quiche courgette-chèvre et salade verte",
+            "tempsPreparation": "30 min (dont cuisson au four)",
+            "ingredients": [
+              { "nom": "pâte brisée", "quantite": "1 rouleau", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "2", "source": "biocoop" },
+              { "nom": "fromage de chèvre", "quantite": "150 g", "source": "biocoop" },
+              { "nom": "œufs", "quantite": "3", "source": "biocoop" },
+              { "nom": "crème liquide", "quantite": "20 cl", "source": "biocoop" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" }
+            ]
+          },
+          "soir": {
+            "nom": "Wrap de légumes et houmous",
+            "tempsPreparation": "10 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "galettes de blé", "quantite": "4", "source": "laFourche" },
+              { "nom": "houmous", "quantite": "250 g", "source": "laFourche" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "poivron", "quantite": "1", "source": "biocoop" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Vendredi",
+          "date": "2026-07-31",
+          "dejeuner": {
+            "nom": "Smoothie pêche-nectarine et tartine complète",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "pêches", "quantite": "2", "source": "biocoop" },
+              { "nom": "nectarines", "quantite": "2", "source": "biocoop" },
+              { "nom": "lait", "quantite": "40 cl", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Omelette aux légumes d'été et salade",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "œufs", "quantite": "8", "source": "biocoop" },
+              { "nom": "courgettes", "quantite": "1", "source": "biocoop" },
+              { "nom": "poivron", "quantite": "1", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "1", "source": "biocoop" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" }
+            ]
+          },
+          "soir": {
+            "nom": "Salade de quinoa et légumes d'été",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "quinoa", "quantite": "250 g", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "3", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "poivron", "quantite": "1", "source": "biocoop" },
+              { "nom": "feta", "quantite": "150 g", "source": "biocoop" },
+              { "nom": "huile d'olive", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          }
+        },
+        {
+          "jour": "Samedi",
+          "date": "2026-08-01",
+          "dejeuner": {
+            "nom": "Tartines pain complet, confiture de prune et pêche",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "beurre", "quantite": "40 g", "source": "biocoop" },
+              { "nom": "confiture de prune", "quantite": "1 pot", "source": "laFourche" },
+              { "nom": "pêches", "quantite": "4", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Sauté de porc, poivrons-oignons, riz",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "filet mignon de porc", "quantite": "600 g", "source": "biocoop" },
+              { "nom": "poivrons", "quantite": "3", "source": "biocoop" },
+              { "nom": "oignon nouveau", "quantite": "2", "source": "biocoop" },
+              { "nom": "riz semi-complet", "quantite": "300 g", "source": "laFourche" },
+              { "nom": "sauce soja", "quantite": "2 c. à soupe", "source": "laFourche" }
+            ]
+          },
+          "soir": {
+            "nom": "Croque simple et salade verte",
+            "tempsPreparation": "15 min",
+            "ingredients": [
+              { "nom": "pain de mie complet", "quantite": "8 tranches", "source": "biocoop" },
+              { "nom": "jambon blanc", "quantite": "4 tranches", "source": "biocoop" },
+              { "nom": "emmental", "quantite": "150 g", "source": "biocoop" },
+              { "nom": "laitue", "quantite": "1", "source": "biocoop" },
+              { "nom": "tomates", "quantite": "2", "source": "biocoop" }
+            ]
+          }
+        },
+        {
+          "jour": "Dimanche",
+          "date": "2026-08-02",
+          "dejeuner": {
+            "nom": "Muesli, lait et framboises",
+            "tempsPreparation": "5 min",
+            "ingredients": [
+              { "nom": "muesli", "quantite": "200 g", "source": "laFourche" },
+              { "nom": "lait", "quantite": "60 cl", "source": "biocoop" },
+              { "nom": "framboises", "quantite": "250 g", "source": "biocoop" }
+            ]
+          },
+          "midi": {
+            "nom": "Pâtes au thon, tomates et olives",
+            "tempsPreparation": "20 min",
+            "ingredients": [
+              { "nom": "pâtes complètes", "quantite": "360 g", "source": "laFourche" },
+              { "nom": "thon au naturel", "quantite": "2 boîtes", "source": "laFourche" },
+              { "nom": "tomates", "quantite": "5", "source": "biocoop" },
+              { "nom": "olives", "quantite": "100 g", "source": "laFourche" },
+              { "nom": "ail nouveau", "quantite": "1 gousse", "source": "biocoop" },
+              { "nom": "basilic frais", "quantite": "1 botte", "source": "biocoop" }
+            ]
+          },
+          "soir": {
+            "nom": "Salade grecque (tomates, concombre, feta, olives)",
+            "tempsPreparation": "10 min (sans cuisson)",
+            "ingredients": [
+              { "nom": "tomates", "quantite": "4", "source": "biocoop" },
+              { "nom": "concombre", "quantite": "1", "source": "biocoop" },
+              { "nom": "feta", "quantite": "200 g", "source": "biocoop" },
+              { "nom": "olives", "quantite": "100 g", "source": "laFourche" },
+              { "nom": "oignon nouveau", "quantite": "1", "source": "biocoop" },
+              { "nom": "pain complet", "quantite": "8 tranches", "source": "biocoop" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

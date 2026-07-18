@@ -33,17 +33,13 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { ListeCoursesService } from './services/ListeCoursesService.js';
-    import { PlanningRepasService } from './services/PlanningRepasService.js';
-    import { RecetteService } from './services/RecetteService.js';
-    import { ListeCoursesItem } from './models/ListeCoursesItem.js';
-    import { genererItemsDepuisPlanning, fusionnerAvecListeExistante } from './utils/GenerateurListeCourses.js';
-    import { getIdSemaine } from './utils/DateSemaine.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { ListeCoursesService } from './menus/services/ListeCoursesService.js';
+    import { ListeCoursesItem } from './menus/models/ListeCoursesItem.js';
+    import { getIdSemaine } from './menus/utils/DateSemaine.js';
 
     let foyerIdCourant = null;
-    let itemsCourants = [];
 
     const liste = document.getElementById('liste-courses');
     const vide = document.getElementById('vide');
@@ -112,28 +108,14 @@
       msgGeneration.classList.add('hidden');
       try {
         const idSemaine = getIdSemaine(new Date());
-        const planning = await PlanningRepasService.obtenirOuCreerSemaine(foyerIdCourant, idSemaine);
-        const idsRecettes = Object.values(planning.jours)
-          .flatMap(jour => Object.values(jour))
-          .map(creneau => creneau.recetteId)
-          .filter(Boolean);
+        const { crees, modifies } = await ListeCoursesService.genererDepuisPlanning(foyerIdCourant, idSemaine);
 
-        if (idsRecettes.length === 0) {
-          afficherMsgGeneration('Aucune recette planifiée cette semaine — rien à générer.');
-          return;
-        }
-
-        const recettesParId = await RecetteService.obtenirRecettesParIds(foyerIdCourant, idsRecettes);
-        const itemsGeneres = genererItemsDepuisPlanning(planning, recettesParId);
-        const { itemsACreer, itemsAModifier } = fusionnerAvecListeExistante(itemsGeneres, itemsCourants);
-
-        if (itemsACreer.length === 0 && itemsAModifier.length === 0) {
+        if (crees === 0 && modifies === 0) {
           afficherMsgGeneration('La liste de courses est déjà à jour par rapport au planning.');
           return;
         }
 
-        await ListeCoursesService.ecrireLot(foyerIdCourant, itemsACreer, itemsAModifier);
-        afficherMsgGeneration(`${itemsACreer.length} article(s) ajouté(s), ${itemsAModifier.length} mis à jour.`);
+        afficherMsgGeneration(`${crees} article(s) ajouté(s), ${modifies} mis à jour.`);
       } catch (err) {
         afficherMsgGeneration(err.message || 'Une erreur est survenue.', true);
       }
@@ -146,7 +128,6 @@
       foyerIdCourant = utilisateur.foyerId;
 
       ListeCoursesService.ecouterListe(foyerIdCourant, (items) => {
-        itemsCourants = items;
         afficherListe(items);
       });
     });

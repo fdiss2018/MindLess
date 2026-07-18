@@ -47,10 +47,10 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { VehiculeService } from './services/VehiculeService.js';
-    import { Vehicule } from './models/Vehicule.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { VehiculeService } from './voiture/services/VehiculeService.js';
+    import { Vehicule } from './voiture/models/Vehicule.js';
 
     const params = new URLSearchParams(window.location.search);
     const vehiculeId = params.get('id');

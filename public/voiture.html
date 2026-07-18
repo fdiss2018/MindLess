@@ -25,11 +25,11 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { VehiculeService } from './services/VehiculeService.js';
-    import { EntretienService } from './services/EntretienService.js';
-    import { calculerRappels } from './utils/RappelsEntretien.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { VehiculeService } from './voiture/services/VehiculeService.js';
+    import { EntretienService } from './voiture/services/EntretienService.js';
+    import { calculerRappels } from './voiture/utils/RappelsEntretien.js';
 
     const liste = document.getElementById('liste-vehicules');
     const vide = document.getElementById('vide');

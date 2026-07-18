@@ -53,9 +53,9 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { FoyerService } from './services/FoyerService.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { FoyerService } from './commun/services/FoyerService.js';
 
     const chargement = document.getElementById('chargement');
     const zoneOnboarding = document.getElementById('zone-onboarding');
@@ -98,8 +98,8 @@
       const nom = document.getElementById('nom-nouveau-foyer').value.trim();
       if (!nom) { afficherMsg('Renseigne un nom de foyer.'); return; }
       try {
-        const foyer = await FoyerService.creerFoyer(nom, utilisateurCourant.id);
-        await UtilisateurService.mettreAJourFoyerId(utilisateurCourant.id, foyer.id);
+        const foyer = await FoyerService.creerFoyer(nom);
+        await UtilisateurService.mettreAJourFoyerId(foyer.id);
         afficherFoyer(foyer);
       } catch (err) {
         afficherMsg(err.message);
@@ -110,8 +110,8 @@
       const code = document.getElementById('code-rejoindre').value.trim();
       if (!code) { afficherMsg('Renseigne un code d\'invitation.'); return; }
       try {
-        const foyer = await FoyerService.rejoindreFoyer(code, utilisateurCourant.id);
-        await UtilisateurService.mettreAJourFoyerId(utilisateurCourant.id, foyer.id);
+        const foyer = await FoyerService.rejoindreFoyer(code);
+        await UtilisateurService.mettreAJourFoyerId(foyer.id);
         afficherFoyer(foyer);
       } catch (err) {
         afficherMsg(err.message);

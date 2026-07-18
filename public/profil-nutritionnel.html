@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Mon profil nutritionnel</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🥗 Mon profil nutritionnel</h1>
+    <p>Utilisé pour personnaliser le bilan nutritionnel hebdomadaire des menus.</p>
+  </header>
+
+  <main>
+    <a href="menus.html" class="lien-retour">← Retour aux menus</a>
+
+    <div class="carte">
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="sexe">Sexe</label>
+          <select id="sexe" class="input">
+            <option value="">— Non renseigné —</option>
+            <option value="homme">Homme</option>
+            <option value="femme">Femme</option>
+          </select>
+        </div>
+        <div class="champ">
+          <label for="annee-naissance">Année de naissance</label>
+          <input type="number" id="annee-naissance" class="input" min="1900" max="2026" placeholder="Ex. 1981">
+        </div>
+      </div>
+
+      <div class="champ">
+        <label for="niveau-activite">Niveau d'activité</label>
+        <select id="niveau-activite" class="input">
+          <option value="sedentaire">Sédentaire (bureau, peu d'exercice)</option>
+          <option value="modere">Modéré (un peu de sport régulier)</option>
+          <option value="actif">Actif (sport fréquent)</option>
+        </select>
+      </div>
+
+      <div class="champ">
+        <label for="poids">Poids (kg, optionnel)</label>
+        <input type="number" id="poids" class="input" min="0" placeholder="Ex. 70">
+      </div>
+
+      <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
+      <p id="msg" class="msg hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+
+    const btnValider = document.getElementById('btn-valider');
+    const msg = document.getElementById('msg');
+
+    function afficherMsg(texte, erreur = false) {
+      msg.textContent = texte;
+      msg.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msg.classList.remove('hidden');
+    }
+
+    btnValider.addEventListener('click', async () => {
+      const sexe = document.getElementById('sexe').value || null;
+      const anneeNaissance = Number(document.getElementById('annee-naissance').value) || null;
+      const niveauActivite = document.getElementById('niveau-activite').value;
+      const poidsKg = Number(document.getElementById('poids').value) || null;
+
+      btnValider.disabled = true;
+      try {
+        await UtilisateurService.mettreAJourProfilNutritionnel({
+          sexe, anneeNaissance, niveauActivite, poidsKg,
+        });
+        afficherMsg('Profil enregistré.');
+      } catch (err) {
+        afficherMsg(err.message || 'Une erreur est survenue.', true);
+      } finally {
+        btnValider.disabled = false;
+      }
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+
+      const profil = utilisateur.profilNutritionnel;
+      if (profil) {
+        document.getElementById('sexe').value = profil.sexe || '';
+        document.getElementById('annee-naissance').value = profil.anneeNaissance || '';
+        document.getElementById('niveau-activite').value = profil.niveauActivite || 'sedentaire';
+        document.getElementById('poids').value = profil.poidsKg || '';
+      }
+    });
+  </script>
+
+</body>
+</html>

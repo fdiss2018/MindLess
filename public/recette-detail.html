@@ -32,9 +32,9 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './services/AuthService.js';
-    import { UtilisateurService } from './services/UtilisateurService.js';
-    import { RecetteService } from './services/RecetteService.js';
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { RecetteService } from './menus/services/RecetteService.js';
 
     const params = new URLSearchParams(window.location.search);
     const recetteId = params.get('id');
