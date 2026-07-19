@@ -11,6 +11,43 @@ L'application a deux parties déployées **séparément** :
 | Frontend | `public/` | HTML/CSS/JS vanilla | Firebase Hosting — https://mindless-c58d3.web.app |
 | Backend | `backend/` | Node.js + Express + firebase-admin | Cloud Run — https://mindless-backend-428494497216.europe-west1.run.app |
 
+## CI/CD
+
+Les déploiements se font désormais **automatiquement via GitHub Actions**
+(`.github/workflows/ci.yml` et `deploy.yml`) — les commandes `gcloud`/`firebase` manuelles plus bas
+dans ce document restent documentées pour le dépannage ou l'itération locale, mais ne sont plus le
+chemin normal de mise en prod.
+
+- **Sur une pull request vers `main`** (`ci.yml`) : deux jobs indépendants lancent `npm run
+  test:run` (frontend et backend). `main` est protégée — impossible de merger sans PR ni sans ces
+  deux checks au vert.
+- **Au merge sur `main`** (`deploy.yml`) : deux jobs indépendants déploient en parallèle.
+  - `deploy-frontend` génère `public/firebase-config.js` et `public/api-config.js` depuis des
+    secrets GitHub (ces fichiers restent gitignorés, jamais commités), déploie Hosting + règles
+    Firestore, puis vérifie que la prod ne pointe jamais vers `localhost`. Ce même garde-fou
+    (`scripts/check-api-config.js`) protège aussi un `firebase deploy` manuel via le hook
+    `predeploy` de `firebase.json`.
+  - `deploy-backend` s'authentifie auprès de GCP et relance `gcloud run deploy` avec les mêmes
+    secrets/variables qu'en local (voir "Backend (Cloud Run)" plus bas pour le détail des flags).
+
+**Secrets GitHub** (Settings > Secrets and variables > Actions) :
+
+| Secret | Contenu |
+|---|---|
+| `GCP_SA_KEY` | Clé JSON du compte de service `mindless-ci-deployer` (déploie le backend) |
+| `FIREBASE_SERVICE_ACCOUNT_DEPLOY` | Clé JSON du compte de service `mindless-firebase-deploy` (déploie Hosting + règles Firestore) |
+| `FIREBASE_CONFIG_JS` | Contenu complet de `public/firebase-config.js` |
+| `PROD_API_BASE_URL` | URL du service Cloud Run de prod |
+| `CORS_ALLOWED_ORIGIN` | Origines autorisées, séparées par des virgules |
+
+`FIREBASE_SERVICE_ACCOUNT_JSON` et `STATIC_API_TOKEN` (valeurs sensibles côté backend) ne sont **pas**
+des secrets GitHub — ils vivent uniquement dans Google Secret Manager, référencés par
+`--set-secrets` dans le job `deploy-backend`. Pour récupérer/faire tourner `STATIC_API_TOKEN` :
+
+```bash
+gcloud secrets versions access latest --secret=STATIC_API_TOKEN --project=mindless-c58d3
+```
+
 ## Prérequis (une fois par poste)
 
 1. Un projet Firebase avec **Firestore** et **Authentication (Google)** activés
@@ -91,6 +128,10 @@ curl http://localhost:3000/api/utilisateurs/moi \
    la liste de courses depuis le planning...).
 
 ## Déployer ses corrections
+
+⚠️ En temps normal, tu n'as rien à faire ici — merger sur `main` déploie automatiquement les deux
+côtés (voir "CI/CD" plus haut). Ce qui suit sert au dépannage ou à tester un déploiement en dehors
+de la CI (ex. diagnostiquer une erreur avant de la reproduire en CI).
 
 ### Frontend (Firebase Hosting + règles Firestore)
 

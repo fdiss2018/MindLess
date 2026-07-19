@@ -32,4 +32,8 @@ export const RecetteService = {
     const items = await ApiClient.get(base(foyerId));
     return items.map((d) => new Recette(d));
   },
+
+  async importerRecettes(foyerId, recettes) {
+    return ApiClient.post(`${base(foyerId)}/importer`, { recettes });
+  },
 };
