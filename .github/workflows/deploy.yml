@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # public/firebase-config.js et public/api-config.js sont gitignorés (voir CLAUDE.md) — ils
+      # sont générés ici, à chaque déploiement, depuis des secrets GitHub. Il n'existe donc plus de
+      # fichier local à "oublier de rebasculer" entre dev et prod : la valeur déployée vient
+      # toujours de secrets.PROD_API_BASE_URL, jamais d'une copie de travail locale.
+      - name: Générer public/firebase-config.js depuis le secret
+        run: echo "${{ secrets.FIREBASE_CONFIG_JS }}" > public/firebase-config.js
+
+      - name: Générer public/api-config.js (URL Cloud Run de production)
+        run: |
+          cat > public/api-config.js <<EOF
+          export const API_BASE_URL = "${{ secrets.PROD_API_BASE_URL }}";
+          EOF
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEPLOY }}
+          export_environment_variables: true
+
+      # Pas de FirebaseExtended/action-hosting-deploy ici : contrairement à homeFit, MindLess a
+      # aussi firestore.rules à déployer, et cette action ne déploie que le Hosting. La CLI directe
+      # fait les deux en une commande, cohérent avec ce qui a été fait manuellement toute la session.
+      - name: Installer firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Déployer Hosting + règles Firestore
+        run: firebase deploy --only hosting,firestore:rules --project mindless-c58d3
+
+      # Ferme la boucle révélée par l'incident déjà vécu : personne ne vérifiait ce qui était
+      # réellement servi en production avant que ça casse silencieusement.
+      - name: Vérifier que la prod ne pointe jamais vers localhost
+        run: curl -fsS https://mindless-c58d3.web.app/api-config.js | grep -qv localhost
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # FIREBASE_SERVICE_ACCOUNT_JSON et STATIC_API_TOKEN viennent de Google Secret Manager via
+      # --set-secrets : ils ne transitent jamais par un fichier en clair ni par un secret GitHub.
+      # CORS_ALLOWED_ORIGIN vient d'un secret GitHub (seule source de vérité, plus de dérive avec un
+      # backend/.env local périmé). Délimiteur ";" au lieu de "," car sa valeur contient elle-même
+      # des virgules.
+      - name: Déployer sur Cloud Run
+        run: |
+          gcloud run deploy mindless-backend \
+            --source=backend \
+            --region=europe-west1 \
+            --project=mindless-c58d3 \
+            --allow-unauthenticated \
+            --max-instances=2 \
+            --set-env-vars="^;^CORS_ALLOWED_ORIGIN=${{ secrets.CORS_ALLOWED_ORIGIN }}" \
+            --set-secrets="FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,STATIC_API_TOKEN=STATIC_API_TOKEN:latest"
+
+      - name: Vérifier que le backend répond (health-check)
+        run: curl -fsS "$(gcloud run services describe mindless-backend --region=europe-west1 --project=mindless-c58d3 --format='value(status.url)')/api/whoami"

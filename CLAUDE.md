@@ -125,6 +125,16 @@ lien planning → courses :
 `courses.html` groupe le résultat par `categorie` et écoute la collection en temps réel
 (`onSnapshot`) pour que les coches se synchronisent instantanément entre les membres du foyer.
 
+**Recettes — filtres, import/export** : `recettes.html` filtre la bibliothèque côté client (titre,
+ingrédient, tag exact via un `<select>` alimenté par les tags distincts du foyer) — pas de route
+backend dédiée, tout tient dans la liste déjà chargée. L'export génère un fichier JSON (tableau de
+`{nom, portions, ingredients, instructions, tags}`, sans `id`/`creePar`/`dateCreation`) téléchargé
+côté client. L'import repasse par le backend (`POST
+/api/foyers/:foyerId/recettes/importer`, body `{ recettes: [...] }`) plutôt que par des appels
+`POST /recettes` répétés côté client : `creePar`/`dateCreation` sont posés une seule fois côté
+serveur, et les entrées sans `nom` ou sans `ingredients` sont silencieusement ignorées (comptées à
+part dans la réponse, `{ importees, ignorees }`) plutôt que de faire échouer tout l'import.
+
 **Profil nutritionnel** (`profil-nutritionnel.html`) : chaque membre renseigne sexe, année de
 naissance, niveau d'activité et poids (`Utilisateur.profilNutritionnel`, tous champs optionnels).
 `menus.html` affiche ensuite un bilan hebdomadaire par membre (`GET
@@ -243,18 +253,20 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
 - Découpage du code (front + back) par module fonctionnel (`commun`/`voiture`/`menus`) plutôt que
   par couche technique, pour absorber les futurs modules sans réorganisation
 
-### ✅ Backend déployé
-- `mindless-backend` sur Cloud Run (projet `mindless-c58d3`, région `europe-west1`), secret
-  `FIREBASE_SERVICE_ACCOUNT_JSON` via Secret Manager — voir README.md pour la procédure de
-  redéploiement et la configuration GCP
+### ✅ Backend déployé + CI/CD
+- `mindless-backend` sur Cloud Run (projet `mindless-c58d3`, région `europe-west1`), secrets
+  `FIREBASE_SERVICE_ACCOUNT_JSON`/`STATIC_API_TOKEN` via Secret Manager — voir README.md pour la
+  configuration GCP
 - Frontend (Firebase Hosting) et backend connectés en prod via `public/api-config.js`
+- Pipeline GitHub Actions (`.github/workflows/ci.yml` + `deploy.yml`, calqué sur le même principe
+  que le repo homeFit) : tests obligatoires sur PR, déploiement automatique des deux côtés au merge
+  sur `main`, `main` protégée (PR + checks verts requis) — voir la section "CI/CD" de README.md
 
 ### 🔜 Étape 6 — Nouveaux modules fonctionnels
 - Gestion des tâches, préparation vacances... — chacun en `backend/src/<module>/` +
   `public/<module>/`, suivant le patron `commun`/`voiture`/`menus`
 - Endpoint dédié pour afficher le nom des membres du foyer (voir "Limite connue" plus haut —
   le backend a déjà l'information)
-- Pas encore de pipeline CI/CD (le déploiement des deux côtés est manuel, voir README.md)
 
 ### 🔜 Autres améliorations identifiées
 - Notifications push pour les rappels d'entretien (Cloud Functions + Firebase Cloud Messaging)

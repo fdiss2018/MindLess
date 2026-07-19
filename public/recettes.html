@@ -19,6 +19,27 @@
 
     <a href="recette-form.html" class="btn-primaire btn-large">+ Ajouter une recette</a>
 
+    <div class="carte">
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="recherche">Rechercher</label>
+          <input type="text" id="recherche" class="input" placeholder="Titre ou ingrédient...">
+        </div>
+        <div class="champ">
+          <label for="filtre-tag">Tag</label>
+          <select id="filtre-tag" class="input">
+            <option value="">Tous les tags</option>
+          </select>
+        </div>
+      </div>
+      <div class="ligne-champs">
+        <button id="btn-exporter" class="btn-secondaire">📤 Exporter (JSON)</button>
+        <button id="btn-importer" class="btn-secondaire">📥 Importer (JSON)</button>
+        <input type="file" id="input-import" accept="application/json" class="hidden">
+      </div>
+      <p id="msg-import" class="msg hidden"></p>
+    </div>
+
     <div id="liste-recettes"></div>
     <p id="vide" class="vide hidden">Aucune recette pour l'instant.</p>
     <p id="chargement" class="chargement">Chargement...</p>
@@ -32,28 +53,123 @@
     const liste = document.getElementById('liste-recettes');
     const vide = document.getElementById('vide');
     const chargement = document.getElementById('chargement');
+    const champRecherche = document.getElementById('recherche');
+    const selectTag = document.getElementById('filtre-tag');
+    const msgImport = document.getElementById('msg-import');
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+    let foyerIdCourant = null;
+    let toutesLesRecettes = [];
 
-      const recettes = await RecetteService.listerRecettes(utilisateur.foyerId);
-      chargement.classList.add('hidden');
+    function afficherMsgImport(texte, erreur = false) {
+      msgImport.textContent = texte;
+      msgImport.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msgImport.classList.remove('hidden');
+    }
+
+    function remplirFiltreTags() {
+      const tagSelectionne = selectTag.value;
+      const tags = [...new Set(toutesLesRecettes.flatMap((r) => r.tags))].sort();
+      selectTag.innerHTML = '<option value="">Tous les tags</option>'
+        + tags.map((t) => `<option value="${t}">${t}</option>`).join('');
+      selectTag.value = tags.includes(tagSelectionne) ? tagSelectionne : '';
+    }
+
+    function correspondAuxFiltres(recette, texte, tag) {
+      const t = texte.trim().toLowerCase();
+      const correspondTexte = !t
+        || recette.nom.toLowerCase().includes(t)
+        || recette.ingredients.some((i) => i.nom.toLowerCase().includes(t));
+      const correspondTag = !tag || recette.tags.includes(tag);
+      return correspondTexte && correspondTag;
+    }
+
+    function afficherListe(recettesAffichees) {
       liste.innerHTML = '';
-      vide.classList.toggle('hidden', recettes.length > 0);
 
-      recettes.forEach((recette) => {
+      if (recettesAffichees.length === 0) {
+        vide.textContent = toutesLesRecettes.length === 0
+          ? "Aucune recette pour l'instant."
+          : 'Aucune recette ne correspond à ces filtres.';
+        vide.classList.remove('hidden');
+        return;
+      }
+
+      vide.classList.add('hidden');
+      recettesAffichees.forEach((recette) => {
         const lien = document.createElement('a');
         lien.href = `recette-detail.html?id=${recette.id}`;
         lien.className = 'carte';
         lien.style.display = 'block';
         lien.innerHTML = `
           <p class="carte-titre">${recette.nom}</p>
-          <p class="carte-desc">${recette.portions} portions · ${recette.ingredients.length} ingrédients</p>
+          <p class="carte-desc">${recette.portions} portions · ${recette.ingredients.length} ingrédients${recette.tags.length ? ' · ' + recette.tags.join(', ') : ''}</p>
         `;
         liste.appendChild(lien);
       });
+    }
+
+    function appliquerFiltres() {
+      afficherListe(toutesLesRecettes.filter(
+        (r) => correspondAuxFiltres(r, champRecherche.value, selectTag.value),
+      ));
+    }
+
+    async function chargerEtAfficher() {
+      chargement.classList.remove('hidden');
+      toutesLesRecettes = await RecetteService.listerRecettes(foyerIdCourant);
+      chargement.classList.add('hidden');
+      remplirFiltreTags();
+      appliquerFiltres();
+    }
+
+    champRecherche.addEventListener('input', appliquerFiltres);
+    selectTag.addEventListener('change', appliquerFiltres);
+
+    document.getElementById('btn-exporter').addEventListener('click', () => {
+      const donnees = toutesLesRecettes.map((r) => ({
+        nom: r.nom, portions: r.portions, ingredients: r.ingredients, instructions: r.instructions, tags: r.tags,
+      }));
+      const blob = new Blob([JSON.stringify(donnees, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const lien = document.createElement('a');
+      lien.href = url;
+      lien.download = `recettes-${new Date().toISOString().slice(0, 10)}.json`;
+      lien.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btn-importer').addEventListener('click', () => {
+      document.getElementById('input-import').click();
+    });
+
+    document.getElementById('input-import').addEventListener('change', async (e) => {
+      const fichier = e.target.files[0];
+      if (!fichier) return;
+
+      try {
+        const contenu = JSON.parse(await fichier.text());
+        const recettesAImporter = Array.isArray(contenu) ? contenu : contenu.recettes;
+        if (!Array.isArray(recettesAImporter)) throw new Error('Format de fichier invalide.');
+
+        const resultat = await RecetteService.importerRecettes(foyerIdCourant, recettesAImporter);
+        afficherMsgImport(
+          `${resultat.importees} recette(s) importée(s)`
+          + (resultat.ignorees ? `, ${resultat.ignorees} ignorée(s) (nom ou ingrédients manquants).` : '.'),
+        );
+        await chargerEtAfficher();
+      } catch (err) {
+        afficherMsgImport(err.message || "Le fichier n'a pas pu être importé.", true);
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      await chargerEtAfficher();
     });
   </script>
 
