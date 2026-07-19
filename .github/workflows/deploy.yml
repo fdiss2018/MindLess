@@ -14,13 +14,24 @@ jobs:
       # sont générés ici, à chaque déploiement, depuis des secrets GitHub. Il n'existe donc plus de
       # fichier local à "oublier de rebasculer" entre dev et prod : la valeur déployée vient
       # toujours de secrets.PROD_API_BASE_URL, jamais d'une copie de travail locale.
+      #
+      # Toujours passer le secret par `env:` puis `$VAR` dans le `run:`, jamais interpoler
+      # `${{ secrets.X }}` directement dans le script — GitHub Actions substitue l'expression comme
+      # texte brut avant que le shell ne parse la ligne, donc tout guillemet contenu dans la valeur
+      # du secret casse la citation du script (déjà arrivé en prod : FIREBASE_CONFIG_JS contient des
+      # `"`, qui refermaient prématurément le `echo "..."` et supprimaient tous les guillemets du
+      # fichier généré).
       - name: Générer public/firebase-config.js depuis le secret
-        run: echo "${{ secrets.FIREBASE_CONFIG_JS }}" > public/firebase-config.js
+        env:
+          FIREBASE_CONFIG_JS: ${{ secrets.FIREBASE_CONFIG_JS }}
+        run: echo "$FIREBASE_CONFIG_JS" > public/firebase-config.js
 
       - name: Générer public/api-config.js (URL Cloud Run de production)
+        env:
+          PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
         run: |
           cat > public/api-config.js <<EOF
-          export const API_BASE_URL = "${{ secrets.PROD_API_BASE_URL }}";
+          export const API_BASE_URL = "$PROD_API_BASE_URL";
           EOF
 
       - uses: google-github-actions/auth@v2
@@ -59,6 +70,8 @@ jobs:
       # backend/.env local périmé). Délimiteur ";" au lieu de "," car sa valeur contient elle-même
       # des virgules.
       - name: Déployer sur Cloud Run
+        env:
+          CORS_ALLOWED_ORIGIN: ${{ secrets.CORS_ALLOWED_ORIGIN }}
         run: |
           gcloud run deploy mindless-backend \
             --source=backend \
@@ -66,7 +79,7 @@ jobs:
             --project=mindless-c58d3 \
             --allow-unauthenticated \
             --max-instances=2 \
-            --set-env-vars="^;^CORS_ALLOWED_ORIGIN=${{ secrets.CORS_ALLOWED_ORIGIN }}" \
+            --set-env-vars="^;^CORS_ALLOWED_ORIGIN=$CORS_ALLOWED_ORIGIN" \
             --set-secrets="FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,STATIC_API_TOKEN=STATIC_API_TOKEN:latest"
 
       - name: Vérifier que le backend répond (health-check)
