@@ -29,9 +29,17 @@
         <span class="icone">🍽️</span>
         <span class="titre">Menus</span>
       </a>
+      <a href="veille.html" class="nav-tuile">
+        <span class="icone">🗞️</span>
+        <span class="titre">Veille</span>
+      </a>
       <a href="foyer.html" class="nav-tuile">
         <span class="icone">🏠</span>
         <span class="titre">Mon foyer</span>
+      </a>
+      <a href="admin.html" class="nav-tuile hidden" id="tuile-admin">
+        <span class="icone">🛠️</span>
+        <span class="titre">Admin</span>
       </a>
     </div>
 
@@ -43,6 +51,7 @@
   <script type="module">
     import { AuthService } from './commun/services/AuthService.js';
     import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { FoyerService } from './commun/services/FoyerService.js';
     import { VehiculeService } from './voiture/services/VehiculeService.js';
     import { EntretienService } from './voiture/services/EntretienService.js';
     import { calculerRappels } from './voiture/utils/RappelsEntretien.js';
@@ -72,6 +81,13 @@
       const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
       if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
       afficherBadgeRappels(utilisateur.foyerId).catch(() => {});
+
+      const desabonnerFoyer = FoyerService.ecouterFoyer(utilisateur.foyerId, (foyer) => {
+        desabonnerFoyer();
+        if (foyer && foyer.creePar === utilisateur.id) {
+          document.getElementById('tuile-admin').classList.remove('hidden');
+        }
+      });
     });
   </script>
 

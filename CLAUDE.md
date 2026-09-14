@@ -60,7 +60,8 @@ Les pages `.html` restent à la racine de `public/` (pas de sous-dossier par mod
 bundler, ce sont de simples `<a href="...">` et chemins relatifs entre pages, les déplacer n'aurait
 aucun bénéfice et casserait tous les liens de navigation.
 
-Modules actuels : `commun`, `voiture`, `menus`. Un futur module (tâches, préparation vacances...)
+Modules actuels : `commun`, `voiture`, `menus`, `veille`. Un futur module (tâches, préparation
+vacances...)
 suit le même patron : créer `backend/src/<module>/` et `public/<module>/` avec la même structure
 interne, et monter ses routes dans `backend/server.js`.
 
@@ -76,6 +77,21 @@ interne, et monter ses routes dans `backend/server.js`.
 `firestore.rules` : il vérifie que `req.uid` figure dans `foyer.membres` avant de laisser passer une
 requête sur une sous-ressource du foyer, et pose `req.foyer` pour éviter une deuxième lecture aux
 routes qui en ont besoin (ex. `nutrition.js`).
+
+`requireCreateurFoyer` (middleware backend, à exécuter après `requireMembreFoyer`) restreint une
+route au créateur du foyer (`foyer.creePar === req.uid`) — premier cas d'usage : lignes éditoriales
+de veille (voir plus bas). MindLess n'a pas de système de rôles : c'est la seule distinction de
+droits entre membres d'un même foyer, tout le reste (recettes, planning, véhicules...) reste
+accessible à parts égales à tous les membres.
+
+Côté front, `public/admin.html` est le point d'entrée unique vers les réglages réservés au créateur
+du foyer (même contrôle d'accès que `veille-parametres.html` : lecture de `foyer.creePar` via
+`FoyerService.ecouterFoyer`, message "réservé au créateur du foyer" sinon) — une tuile `nav-tuile`
+dédiée sur `index.html`, masquée par défaut et affichée seulement pour le créateur. Pas de
+répertoire `admin/` par module : c'est une page d'accueil qui renvoie vers les réglages de chaque
+module (aujourd'hui `veille-parametres.html`, seul réglage admin existant) plutôt qu'un module à
+part entière — un futur réglage admin (autre module) s'ajoute comme une tuile de plus ici, pas
+comme une nouvelle route API.
 
 ### `voiture` — véhicules, entretiens, rappels
 
@@ -152,6 +168,93 @@ naissance, niveau d'activité et poids (`Utilisateur.profilNutritionnel`, tous c
 
 Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer le calcul pour le foyer.
 
+### `veille` — articles d'actualité par catégorie
+
+- **Backend** : `domain/{Categories,Article,ArticleMarkdown,InterpreterArticleIA}.js`,
+  `repositories/{ArticleRepository,GeminiClient,LigneEditorialeRepository}.js`, CRUD + génération
+  IA + import dans `routes/articles.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
+- **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
+  `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
+
+6 catégories fixes (`domain/Categories.js`, table de référence comme
+`voiture/utils/ReglesEntretien.js`) : `politique`, `marseille`, `culture`, `sortir_marseille`,
+`ecologie`, `ia` — ces deux dernières avec un `accentTendances: true` qui infléchit le prompt IA
+vers les tendances émergentes du sujet plutôt qu'un résumé générique.
+
+Un article peut être créé de **4 façons** (`source: 'manuel'|'ia'|'import_md'|'api'`), toutes
+centralisées sur **`ArticleRepository.creer(foyerId, {titre, categorie, contenu, source,
+creePar})`** (`routes/articles.js`) : chaque point d'entrée ne fait que sa propre validation puis
+appelle ce point de passage unique, qui pose `dateCreation` et persiste — évite de dupliquer la
+construction de l'`Article` (et un bug/évolution à corriger 4 fois) dans chaque route. La règle de
+validité des champs (`titre`/`categorie`/`contenu` non vides, catégorie parmi `CATEGORIES`) est
+elle aussi centralisée dans `domain/Article.validerChampsArticle` (fonction pure, retourne un
+message d'erreur ou `null` — chaque route peut contextualiser le message, ex. import `.md`).
+
+- **Manuel** (`POST /api/foyers/:foyerId/articles`) : formulaire `article-form.html`, comme
+  `recette-form.html`. Ouvert à tout membre du foyer.
+- **Génération IA** (`POST .../articles/generer`) : appelle l'API Gemini via
+  `repositories/GeminiClient.js`, qui reprend le pattern déjà en place dans le repo frère `homeFit`
+  (`backend/src/services/GeminiClient.js`) — `fetch` natif (pas de SDK), clé en query param
+  (`GEMINI_API_KEY`), `responseSchema` structuré pour extraire `{titre, contenu}`, retry sur
+  `TIMEOUT`/`DEGENERE` uniquement. **Limite assumée** : un LLM sans accès web ne peut pas rapporter
+  de vraies actualités en temps réel — les articles `source: 'ia'` sont marqués d'un badge
+  "Généré par IA" côté front (`veille.html`, `article-detail.html`) plutôt que présentés comme du
+  factuel vérifié. Ouvert à tout membre du foyer.
+- **Import `.md`** (`POST .../articles/importer-md`) : un fichier à la fois, avec front-matter
+  minimal parsé à la main (`domain/ArticleMarkdown.js`, pas de dépendance YAML) :
+  ```
+  ---
+  titre: Mon article
+  categorie: ia
+  ---
+  Corps de l'article...
+  ```
+  Contrairement à l'import JSON en lot des recettes, une entrée invalide fait échouer tout
+  l'import (400) plutôt que d'être silencieusement ignorée — un seul article par fichier. Ouvert à
+  tout membre du foyer.
+- **API externe** (`POST .../articles/externe`) : pensée pour un script/une automatisation en
+  dehors de l'app (pas l'UI) — voir README.md "API externe (veille)" pour l'authentification
+  (`STATIC_API_TOKEN` + `X-Test-Uid`) et un exemple `curl`. **Seul point d'entrée réservé au
+  créateur du foyer** (`requireCreateurFoyer`, 403 sinon) — les 3 autres restent ouverts à tout
+  membre. Articles marqués `source: 'api'`, badge "Ajouté via API" côté front.
+
+**Lecture/écoute** : pas de suivi d'un statut "lu" (non demandé) — un article se consulte à l'écran
+(`article-detail.html`) ou s'écoute via le bouton "🔊 Écouter", qui appelle l'API Web Speech du
+navigateur (`speechSynthesis`, `services/LectureVocaleService.js`) — gratuite, 100% côté client,
+aucune dépendance/coût backend, mais qualité de voix variable selon l'OS/navigateur et pas de
+fichier audio téléchargeable.
+
+Pas de lecture temps réel (`onSnapshot`) sur `articles` : la bibliothèque d'un foyer reste petite,
+`veille.html` filtre par catégorie/recherche côté client comme `recettes.html` filtre par tag.
+
+**Lignes éditoriales (persona IA par catégorie)** : le créateur du foyer (`foyer.creePar`, seule
+distinction de droits de l'app — voir `requireCreateurFoyer` dans `commun`) peut définir, depuis
+`veille-parametres.html`, un prompt système par catégorie qui remplace le paragraphe générique
+envoyé à Gemini (persona, angle éditorial, format de réponse attendu...). Stocké dans
+`foyers/{foyerId}/veilleConfig/lignesEditoriales` — un unique document (pas une collection), une
+clé par catégorie. `GET /api/foyers/:foyerId/lignes-editoriales` est accessible à tout membre du
+foyer (nécessaire pour que la génération utilise la bonne ligne quel que soit le membre qui la
+déclenche) et résout déjà les valeurs par défaut (`domain/Categories.LIGNES_EDITORIALES_PAR_DEFAUT`) ; `PUT`
+est réservé au créateur du foyer (403 sinon). Quelle que soit la ligne éditoriale (par défaut ou
+personnalisée), `InterpreterArticleIA` conserve toujours les règles de format JSON et la mise en
+garde anti-hallucination — un admin ne peut pas désactiver cet avertissement via son prompt.
+`culture` et `ia` ont chacune un persona par défaut complet ("Éclaireur Art Contemporain" /
+"Éclaireur IA", ce dernier taillé pour un profil professionnel IT déjà utilisateur quotidien de
+Claude/Gemini) ; les 4 autres catégories retombent sur le prompt générique tant qu'elles n'ont pas
+été personnalisées.
+
+**Continuité éditoriale** : chaque génération IA (`POST .../articles/generer`) relit les
+`NB_ARTICLES_CONTEXTE` (5) derniers articles déjà publiés dans la même catégorie du foyer
+(`ArticleRepository.lister` + filtre par `categorie`, déjà trié par `dateCreation` décroissant) et
+les résume (`Article.extraireResume`, 300 caractères) pour les donner en contexte à
+`InterpreterArticleIA.construireRequeteArticleIA` — le prompt demande alors explicitement de ne pas
+répéter une information déjà couverte, de signaler ce qui a changé depuis, et permet de citer un
+article précédent par son titre. Ce contexte reste un texte libre dans le prompt : rien ne garantit
+que l'IA cite correctement un article (elle ne peut de toute façon référencer que par titre en
+prose, jamais par lien). Le renvoi *cliquable* vers les articles liés est géré séparément, de façon
+déterministe (pas par l'IA) : `article-detail.html` affiche un bloc "Voir aussi" listant les 5
+articles les plus récents de la même catégorie (hors l'article courant).
+
 ## Modèle de données Firestore
 
 MindLess est une application **familiale multi-utilisateurs** : toutes les données métier sont
@@ -180,6 +283,12 @@ foyers/{foyerId}/planningRepas/{idSemaine}          # idSemaine = "2026-W28" (IS
 
 foyers/{foyerId}/listeCourses/{itemId}              # collection plate = édition concurrente sans conflit
   { nom, quantite, unite, categorie, coche, origine: 'manuel'|'recette'|'mixte', recetteIds: [] }
+
+foyers/{foyerId}/articles/{articleId}
+  { titre, categorie, contenu, source: 'manuel'|'ia'|'import_md', creePar, dateCreation }
+
+foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une collection
+  { [categorie]: texte, ..., dateMaj }              # clé absente = valeur par défaut (voir Categories.js)
 ```
 
 ### Rejoindre un foyer
@@ -191,20 +300,22 @@ rejoindre un foyer passent tous les deux par le backend (`POST /api/foyers`,
 Admin qui vérifie l'existence du code et ajoute l'`uid` à `membres` (`FieldValue.arrayUnion`), en
 contournant `firestore.rules` — le client n'a plus besoin de lire un foyer avant d'en être membre.
 
-**Limite connue** : `firestore.rules` interdit toute lecture/écriture directe sur
-`utilisateurs/{uid}` désormais (`allow read, write: if false`) ; un membre du foyer ne peut donc pas
-voir le nom affiché des autres membres côté client, seulement leur nombre (`foyer.html` affiche "X
-membres dans ce foyer", pas leurs noms). Ce n'est plus une limite d'architecture : le backend, via
-le SDK Admin, résout déjà les noms des membres d'un foyer ailleurs (voir
-`menus/routes/nutrition.js`, qui charge `req.foyer.membres` puis chaque `Utilisateur`) — il suffirait
-d'exposer un endpoint dédié pour que `foyer.html` les affiche.
+**Limite connue (partiellement résolue)** : `firestore.rules` interdit toute lecture/écriture
+directe sur `utilisateurs/{uid}` (`allow read, write: if false`) ; un membre du foyer ne peut donc
+pas lire le nom affiché des autres membres directement depuis Firestore. Le backend, via le SDK
+Admin, contourne cette limite : `GET /api/foyers/:foyerId/createur` (`commun/routes/foyers.js`,
+`requireMembreFoyer`) résout le nom affiché du créateur du foyer (`UtilisateurRepository.obtenir`)
+et l'expose à `foyer.html` ("Créé par ..."/"Créé par toi"). Même pattern déjà utilisé ailleurs pour
+tous les membres, pas seulement le créateur (voir `menus/routes/nutrition.js`, qui charge
+`req.foyer.membres` puis chaque `Utilisateur`) — reste à généraliser en un endpoint "membres" pour
+que `foyer.html` affiche aussi les noms des autres membres, pas seulement leur nombre.
 
 **Sécurité Firestore** : `firestore.rules` n'autorise plus aucune écriture cliente (`allow write: if
 false` partout). En lecture, seules trois zones restent accessibles aux membres du foyer
 (`estMembreDuFoyer()`), pour les 3 lectures temps réel (`onSnapshot`) qui subsistent côté front :
-`foyers/{foyerId}`, `planningRepas/{document=**}`, `listeCourses/{document=**}`. `vehicules` et
-`recettes` sont entièrement fermés en lecture côté client (`allow read, write: if false`) — leurs
-pages passent exclusivement par `ApiClient`, sans lecture temps réel.
+`foyers/{foyerId}`, `planningRepas/{document=**}`, `listeCourses/{document=**}`. `vehicules`,
+`recettes`, `articles` et `veilleConfig` sont entièrement fermés en lecture côté client (`allow
+read, write: if false`) — leurs pages passent exclusivement par `ApiClient`, sans lecture temps réel.
 
 ## Conventions de code
 
@@ -262,17 +373,27 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
   que le repo homeFit) : tests obligatoires sur PR, déploiement automatique des deux côtés au merge
   sur `main`, `main` protégée (PR + checks verts requis) — voir la section "CI/CD" de README.md
 
-### 🔜 Étape 6 — Nouveaux modules fonctionnels
+### ✅ Étape 6 — Module veille (articles d'actualité)
+- 6 catégories fixes (politique, Marseille, culture, sorties Marseille, écologie, IA), articles
+  créés manuellement, générés par IA (Gemini) ou importés depuis un `.md` avec front-matter
+- Lecture à l'écran ou écoute via synthèse vocale navigateur (Web Speech API)
+
+### 🔜 Étape 7 — Nouveaux modules fonctionnels
 - Gestion des tâches, préparation vacances... — chacun en `backend/src/<module>/` +
-  `public/<module>/`, suivant le patron `commun`/`voiture`/`menus`
-- Endpoint dédié pour afficher le nom des membres du foyer (voir "Limite connue" plus haut —
-  le backend a déjà l'information)
+  `public/<module>/`, suivant le patron `commun`/`voiture`/`menus`/`veille`
+- Généraliser `GET .../createur` (qui ne résout que le nom du créateur) à un endpoint "membres" pour
+  que `foyer.html` affiche le nom de tous les membres, pas seulement leur nombre (voir "Limite
+  connue" plus haut)
 
 ### 🔜 Autres améliorations identifiées
 - Notifications push pour les rappels d'entretien (Cloud Functions + Firebase Cloud Messaging)
 - Conversion d'unités dans le générateur de liste de courses (ex. g ↔ kg)
 - Intervalles d'entretien personnalisables par véhicule
 - Étendre `ResoudreProfil`/`ObjectifsNutritionnels` à d'autres tranches d'âge (enfant, senior)
+- Veille : pas de limite de coût/fréquence sur `POST .../articles/generer` (appel Gemini payant
+  au-delà du quota gratuit) — à ajouter si l'usage le justifie
+- Veille : aucune source d'actualité réelle (recherche web/agrégateur de news) — la génération IA
+  reste un modèle de langage sans accès temps réel, voir la limite documentée plus haut
 
 ---
 

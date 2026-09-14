@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Paramètres de la veille</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>⚙️ Paramètres de la veille</h1>
+    <p>Ligne éditoriale utilisée par l'IA pour générer un article, par catégorie.</p>
+  </header>
+
+  <main>
+    <a href="veille.html" class="lien-retour">← Retour</a>
+
+    <p id="acces-refuse" class="msg msg-erreur hidden">
+      Seul le créateur du foyer peut modifier les lignes éditoriales.
+    </p>
+
+    <div id="formulaire" class="hidden"></div>
+
+    <button id="btn-enregistrer" class="btn-primaire btn-large hidden">Enregistrer</button>
+    <p id="msg" class="msg hidden"></p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { FoyerService } from './commun/services/FoyerService.js';
+    import { LigneEditorialeService } from './veille/services/LigneEditorialeService.js';
+    import { CATEGORIES } from './veille/utils/Categories.js';
+
+    const chargement = document.getElementById('chargement');
+    const accesRefuse = document.getElementById('acces-refuse');
+    const formulaire = document.getElementById('formulaire');
+    const btnEnregistrer = document.getElementById('btn-enregistrer');
+    const msg = document.getElementById('msg');
+
+    let foyerIdCourant = null;
+
+    function afficherMsg(texte, erreur = false) {
+      msg.textContent = texte;
+      msg.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msg.classList.remove('hidden');
+    }
+
+    function construireFormulaire(lignes) {
+      formulaire.innerHTML = Object.entries(CATEGORIES).map(([cle, { libelle }]) => `
+        <div class="carte">
+          <p class="carte-titre">${libelle}</p>
+          <textarea class="input" rows="6" data-categorie="${cle}" placeholder="Ligne éditoriale par défaut (prompt générique) si laissé vide.">${lignes[cle] || ''}</textarea>
+        </div>
+      `).join('');
+    }
+
+    function lireFormulaire() {
+      const lignes = {};
+      formulaire.querySelectorAll('textarea[data-categorie]').forEach((champ) => {
+        lignes[champ.dataset.categorie] = champ.value.trim();
+      });
+      return lignes;
+    }
+
+    btnEnregistrer.addEventListener('click', async () => {
+      btnEnregistrer.disabled = true;
+      try {
+        await LigneEditorialeService.enregistrerLignesEditoriales(foyerIdCourant, lireFormulaire());
+        afficherMsg('Lignes éditoriales enregistrées.');
+      } catch (err) {
+        afficherMsg(err.message || "L'enregistrement a échoué.", true);
+      } finally {
+        btnEnregistrer.disabled = false;
+      }
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+
+      const desabonner = FoyerService.ecouterFoyer(foyerIdCourant, async (foyer) => {
+        desabonner();
+        chargement.classList.add('hidden');
+
+        if (!foyer || foyer.creePar !== utilisateur.id) {
+          accesRefuse.classList.remove('hidden');
+          return;
+        }
+
+        const lignes = await LigneEditorialeService.obtenirLignesEditoriales(foyerIdCourant);
+        construireFormulaire(lignes);
+        formulaire.classList.remove('hidden');
+        btnEnregistrer.classList.remove('hidden');
+      });
+    });
+  </script>
+
+</body>
+</html>

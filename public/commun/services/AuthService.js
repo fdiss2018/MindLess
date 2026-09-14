@@ -10,6 +10,10 @@ export const AuthService = {
 
   async seConnecterAvecGoogle() {
     const provider = new GoogleAuthProvider();
+    // Sans ça, si une session Google est déjà active dans le navigateur (cookies), le popup
+    // réutilise silencieusement ce compte sans jamais proposer le sélecteur — se déconnecter de
+    // l'app puis se reconnecter ne suffit donc pas à changer de compte Google.
+    provider.setCustomParameters({ prompt: 'select_account' });
     const cred = await signInWithPopup(auth, provider);
     return cred.user;
   },
