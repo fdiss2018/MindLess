@@ -20,6 +20,7 @@
     <div class="carte hidden" id="carte-foyer-actuel">
       <p class="carte-titre" id="nom-foyer"></p>
       <p class="carte-desc" id="nombre-membres"></p>
+      <p class="carte-desc" id="cree-par"></p>
       <label>Code d'invitation à partager</label>
       <p class="code-invitation" id="code-foyer"></p>
       <p class="carte-desc" style="margin-top:10px">Transmets ce code à un membre de ta famille pour qu'il rejoigne ce foyer.</p>
@@ -50,6 +51,10 @@
     </div>
 
     <p id="chargement" class="chargement">Chargement...</p>
+
+    <p style="text-align:center">
+      <a href="#" id="btn-deconnexion">Se déconnecter</a>
+    </p>
   </main>
 
   <script type="module">
@@ -63,6 +68,7 @@
     const lienRetour = document.getElementById('lien-retour');
     const nomFoyer = document.getElementById('nom-foyer');
     const nombreMembres = document.getElementById('nombre-membres');
+    const creePar = document.getElementById('cree-par');
     const codeFoyer = document.getElementById('code-foyer');
     const msg = document.getElementById('msg');
 
@@ -85,6 +91,20 @@
         ? `${foyer.membres.length} membres dans ce foyer`
         : '1 membre dans ce foyer';
       codeFoyer.textContent = foyer.id;
+      afficherCreateur(foyer);
+    }
+
+    async function afficherCreateur(foyer) {
+      if (foyer.creePar === utilisateurCourant.id) {
+        creePar.textContent = 'Créé par toi';
+        return;
+      }
+      try {
+        const { nomAffiche } = await FoyerService.obtenirCreateur(foyer.id);
+        creePar.textContent = `Créé par ${nomAffiche || 'un membre parti depuis'}`;
+      } catch {
+        creePar.textContent = '';
+      }
     }
 
     function afficherOnboarding() {
@@ -93,6 +113,11 @@
       lienRetour.classList.add('hidden');
       zoneOnboarding.classList.remove('hidden');
     }
+
+    document.getElementById('btn-deconnexion').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await AuthService.seDeconnecter();
+    });
 
     document.getElementById('btn-creer-foyer').addEventListener('click', async () => {
       const nom = document.getElementById('nom-nouveau-foyer').value.trim();

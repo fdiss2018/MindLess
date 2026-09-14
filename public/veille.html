@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Veille</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🗞️ Veille</h1>
+    <p>Les actualités du foyer, par catégorie.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour à l'accueil</a>
+
+    <a href="article-form.html" class="btn-primaire btn-large">+ Nouvel article</a>
+    <a href="veille-parametres.html" id="lien-parametres" class="btn-secondaire btn-large hidden">⚙️ Lignes éditoriales</a>
+
+    <div class="carte">
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="recherche">Rechercher</label>
+          <input type="text" id="recherche" class="input" placeholder="Titre ou contenu...">
+        </div>
+        <div class="champ">
+          <label for="filtre-categorie">Catégorie</label>
+          <select id="filtre-categorie" class="input">
+            <option value="">Toutes les catégories</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="carte">
+      <p class="carte-titre">✨ Générer un article par IA</p>
+      <p class="carte-desc">
+        Contenu généré à partir d'un modèle sans accès à l'actualité en temps réel — à recouper
+        avant de le considérer comme factuel.
+      </p>
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="generer-categorie">Catégorie</label>
+          <select id="generer-categorie" class="input"></select>
+        </div>
+        <div class="champ">
+          <label for="generer-sujet">Sujet précis (optionnel)</label>
+          <input type="text" id="generer-sujet" class="input" placeholder="Ex. la dernière COP, un modèle d'IA récent...">
+        </div>
+      </div>
+      <button id="btn-generer" class="btn-secondaire">✨ Générer</button>
+      <p id="msg-generation" class="msg hidden"></p>
+    </div>
+
+    <div class="carte">
+      <button id="btn-importer" class="btn-secondaire">📥 Importer un article (.md)</button>
+      <input type="file" id="input-import" accept=".md,text/markdown" class="hidden">
+      <p id="msg-import" class="msg hidden"></p>
+    </div>
+
+    <div id="liste-articles"></div>
+    <p id="vide" class="vide hidden">Aucun article pour l'instant.</p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { FoyerService } from './commun/services/FoyerService.js';
+    import { ArticleService } from './veille/services/ArticleService.js';
+    import { CATEGORIES } from './veille/utils/Categories.js';
+
+    const liste = document.getElementById('liste-articles');
+    const vide = document.getElementById('vide');
+    const chargement = document.getElementById('chargement');
+    const champRecherche = document.getElementById('recherche');
+    const selectFiltreCategorie = document.getElementById('filtre-categorie');
+    const selectGenererCategorie = document.getElementById('generer-categorie');
+    const champGenererSujet = document.getElementById('generer-sujet');
+    const btnGenerer = document.getElementById('btn-generer');
+    const msgGeneration = document.getElementById('msg-generation');
+    const msgImport = document.getElementById('msg-import');
+
+    let foyerIdCourant = null;
+    let tousLesArticles = [];
+
+    const optionsCategories = Object.entries(CATEGORIES)
+      .map(([cle, { libelle }]) => `<option value="${cle}">${libelle}</option>`)
+      .join('');
+    selectFiltreCategorie.insertAdjacentHTML('beforeend', optionsCategories);
+    selectGenererCategorie.innerHTML = optionsCategories;
+
+    function afficherMsg(element, texte, erreur = false) {
+      element.textContent = texte;
+      element.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      element.classList.remove('hidden');
+    }
+
+    function extrait(contenu) {
+      const texte = contenu.trim();
+      return texte.length > 140 ? texte.slice(0, 140).trim() + '…' : texte;
+    }
+
+    function correspondAuxFiltres(article, texte, categorie) {
+      const t = texte.trim().toLowerCase();
+      const correspondTexte = !t
+        || article.titre.toLowerCase().includes(t)
+        || article.contenu.toLowerCase().includes(t);
+      const correspondCategorie = !categorie || article.categorie === categorie;
+      return correspondTexte && correspondCategorie;
+    }
+
+    function afficherListe(articlesAffiches) {
+      liste.innerHTML = '';
+
+      if (articlesAffiches.length === 0) {
+        vide.textContent = tousLesArticles.length === 0
+          ? "Aucun article pour l'instant."
+          : 'Aucun article ne correspond à ces filtres.';
+        vide.classList.remove('hidden');
+        return;
+      }
+
+      vide.classList.add('hidden');
+      articlesAffiches.forEach((article) => {
+        const lien = document.createElement('a');
+        lien.href = `article-detail.html?id=${article.id}`;
+        lien.className = 'carte';
+        lien.style.display = 'block';
+        lien.innerHTML = `
+          <p class="carte-titre">${article.titre}</p>
+          <p>
+            <span class="badge badge-gris">${CATEGORIES[article.categorie]?.libelle || article.categorie}</span>
+            ${article.source === 'ia' ? '<span class="badge badge-jaune">Généré par IA</span>' : ''}
+            ${article.source === 'api' ? '<span class="badge badge-gris">Ajouté via API</span>' : ''}
+          </p>
+          <p class="carte-desc">${extrait(article.contenu)}</p>
+        `;
+        liste.appendChild(lien);
+      });
+    }
+
+    function appliquerFiltres() {
+      afficherListe(tousLesArticles.filter(
+        (a) => correspondAuxFiltres(a, champRecherche.value, selectFiltreCategorie.value),
+      ));
+    }
+
+    async function chargerEtAfficher() {
+      chargement.classList.remove('hidden');
+      tousLesArticles = await ArticleService.listerArticles(foyerIdCourant);
+      chargement.classList.add('hidden');
+      appliquerFiltres();
+    }
+
+    champRecherche.addEventListener('input', appliquerFiltres);
+    selectFiltreCategorie.addEventListener('change', appliquerFiltres);
+
+    btnGenerer.addEventListener('click', async () => {
+      btnGenerer.disabled = true;
+      msgGeneration.classList.add('hidden');
+      try {
+        const { id } = await ArticleService.genererArticleIA(foyerIdCourant, {
+          categorie: selectGenererCategorie.value,
+          sujet: champGenererSujet.value.trim(),
+        });
+        window.location.href = `article-detail.html?id=${id}`;
+      } catch (err) {
+        afficherMsg(msgGeneration, err.message || "La génération a échoué.", true);
+        btnGenerer.disabled = false;
+      }
+    });
+
+    document.getElementById('btn-importer').addEventListener('click', () => {
+      document.getElementById('input-import').click();
+    });
+
+    document.getElementById('input-import').addEventListener('change', async (e) => {
+      const fichier = e.target.files[0];
+      if (!fichier) return;
+
+      try {
+        const contenuMarkdown = await fichier.text();
+        const resultat = await ArticleService.importerArticleMd(foyerIdCourant, contenuMarkdown);
+        afficherMsg(msgImport, `Article "${resultat.titre}" importé.`);
+        await chargerEtAfficher();
+      } catch (err) {
+        afficherMsg(msgImport, err.message || "Le fichier n'a pas pu être importé.", true);
+      } finally {
+        e.target.value = '';
+      }
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      await chargerEtAfficher();
+
+      const desabonnerFoyer = FoyerService.ecouterFoyer(foyerIdCourant, (foyer) => {
+        desabonnerFoyer();
+        if (foyer && foyer.creePar === utilisateur.id) {
+          document.getElementById('lien-parametres').classList.remove('hidden');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

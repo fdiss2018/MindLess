@@ -11,6 +11,8 @@ import { recettesRouter } from './src/menus/routes/recettes.js';
 import { planningRouter } from './src/menus/routes/planning.js';
 import { listeCoursesRouter } from './src/menus/routes/listeCourses.js';
 import { nutritionRouter } from './src/menus/routes/nutrition.js';
+import { articlesRouter } from './src/veille/routes/articles.js';
+import { lignesEditorialesRouter } from './src/veille/routes/lignesEditoriales.js';
 
 const app = express();
 
@@ -37,6 +39,8 @@ app.use('/api/foyers/:foyerId/recettes', authentifier, recettesRouter);
 app.use('/api/foyers/:foyerId/planning', authentifier, planningRouter);
 app.use('/api/foyers/:foyerId/liste-courses', authentifier, listeCoursesRouter);
 app.use('/api/foyers/:foyerId/nutrition', authentifier, nutritionRouter);
+app.use('/api/foyers/:foyerId/articles', authentifier, articlesRouter);
+app.use('/api/foyers/:foyerId/lignes-editoriales', authentifier, lignesEditorialesRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

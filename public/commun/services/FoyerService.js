@@ -15,6 +15,13 @@ export const FoyerService = {
     return new Foyer(donnees);
   },
 
+  // Le client ne peut pas lire utilisateurs/{uid} directement (firestore.rules) : seul le backend
+  // (SDK Admin) résout le nom affiché du créateur. Retourne { uid, nomAffiche } — nomAffiche à
+  // `null` si le compte utilisateur du créateur est introuvable (cas limite).
+  async obtenirCreateur(foyerId) {
+    return ApiClient.get(`/api/foyers/${foyerId}/createur`);
+  },
+
   // Lecture temps réel conservée en direct sur Firestore (hybride) : le nombre
   // de membres doit se mettre à jour instantanément sur foyer.html sans
   // recharger la page. Toujours protégée par firestore.rules (lecture seule,

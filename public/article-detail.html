@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Article</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">🗞️ Article</h1>
+    <p id="sous-titre"></p>
+  </header>
+
+  <main>
+    <a href="veille.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <button id="btn-ecouter" class="btn-secondaire">🔊 Écouter</button>
+      <p id="contenu" class="carte-desc" style="white-space:pre-wrap; margin-top:14px"></p>
+    </div>
+
+    <a id="lien-modifier" href="#" class="btn-secondaire btn-large">Modifier cet article</a>
+
+    <div id="carte-voir-aussi" class="carte hidden">
+      <p class="carte-titre">Voir aussi</p>
+      <div id="liste-voir-aussi"></div>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { ArticleService } from './veille/services/ArticleService.js';
+    import { LectureVocaleService } from './veille/services/LectureVocaleService.js';
+    import { CATEGORIES } from './veille/utils/Categories.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get('id');
+    document.getElementById('lien-modifier').href = `article-form.html?id=${articleId}`;
+
+    const btnEcouter = document.getElementById('btn-ecouter');
+    btnEcouter.disabled = true; // réactivé une fois l'article chargé (voir ecouterAuth ci-dessous)
+    if (!LectureVocaleService.estDisponible()) {
+      btnEcouter.title = "Synthèse vocale non disponible sur ce navigateur.";
+    }
+
+    let enLecture = false;
+    btnEcouter.addEventListener('click', () => {
+      if (enLecture) {
+        LectureVocaleService.arreter();
+        btnEcouter.textContent = '🔊 Écouter';
+        enLecture = false;
+        return;
+      }
+      LectureVocaleService.lire(document.getElementById('contenu').textContent);
+      btnEcouter.textContent = '⏹️ Arrêter';
+      enLecture = true;
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+
+      const article = await ArticleService.obtenirArticle(utilisateur.foyerId, articleId);
+      document.getElementById('chargement').classList.add('hidden');
+      if (!article) { window.location.href = 'veille.html'; return; }
+
+      document.getElementById('titre').textContent = `🗞️ ${article.titre}`;
+      document.getElementById('sous-titre').innerHTML = `
+        <span class="badge badge-gris">${CATEGORIES[article.categorie]?.libelle || article.categorie}</span>
+        ${article.source === 'ia' ? '<span class="badge badge-jaune">Généré par IA — à vérifier</span>' : ''}
+        ${article.source === 'api' ? '<span class="badge badge-gris">Ajouté via API</span>' : ''}
+      `;
+      document.getElementById('contenu').textContent = article.contenu;
+      if (LectureVocaleService.estDisponible()) btnEcouter.disabled = false;
+
+      // "Voir aussi" : renvoi déterministe vers les autres articles déjà publiés dans la même
+      // catégorie (pas de lien choisi par l'IA, qui ne peut que citer un titre en prose dans le
+      // contenu généré — voir CLAUDE.md section "veille" / continuité éditoriale).
+      const autresArticles = (await ArticleService.listerArticles(utilisateur.foyerId))
+        .filter((a) => a.categorie === article.categorie && a.id !== article.id)
+        .slice(0, 5);
+
+      if (autresArticles.length > 0) {
+        document.getElementById('liste-voir-aussi').innerHTML = autresArticles.map((a) => `
+          <a href="article-detail.html?id=${a.id}" class="liste-item">
+            <div class="liste-item-info">
+              <p class="liste-item-nom">${a.titre}</p>
+            </div>
+          </a>
+        `).join('');
+        document.getElementById('carte-voir-aussi').classList.remove('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>

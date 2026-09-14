@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Article</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1 id="titre">🗞️ Nouvel article</h1>
+  </header>
+
+  <main>
+    <a href="veille.html" class="lien-retour">← Retour</a>
+
+    <div class="carte">
+      <div class="champ">
+        <label for="champ-titre">Titre</label>
+        <input type="text" id="champ-titre" class="input" placeholder="Ex. Nouvelle exposition au MUCEM">
+      </div>
+      <div class="champ">
+        <label for="champ-categorie">Catégorie</label>
+        <select id="champ-categorie" class="input"></select>
+      </div>
+      <div class="champ">
+        <label for="champ-contenu">Contenu</label>
+        <textarea id="champ-contenu" class="input" rows="10"></textarea>
+      </div>
+
+      <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
+      <button id="btn-supprimer" class="btn-danger btn-large hidden" style="margin-top:8px">Supprimer cet article</button>
+      <p id="msg" class="msg hidden"></p>
+    </div>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { ArticleService } from './veille/services/ArticleService.js';
+    import { Article } from './veille/models/Article.js';
+    import { CATEGORIES } from './veille/utils/Categories.js';
+
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get('id');
+
+    const titre = document.getElementById('titre');
+    const champTitre = document.getElementById('champ-titre');
+    const champCategorie = document.getElementById('champ-categorie');
+    const champContenu = document.getElementById('champ-contenu');
+    const btnValider = document.getElementById('btn-valider');
+    const btnSupprimer = document.getElementById('btn-supprimer');
+    const msg = document.getElementById('msg');
+
+    let foyerIdCourant = null;
+
+    champCategorie.innerHTML = Object.entries(CATEGORIES)
+      .map(([cle, { libelle }]) => `<option value="${cle}">${libelle}</option>`)
+      .join('');
+
+    function afficherMsg(texte) {
+      msg.textContent = texte;
+      msg.className = 'msg msg-erreur';
+      msg.classList.remove('hidden');
+    }
+
+    async function chargerArticle() {
+      const article = await ArticleService.obtenirArticle(foyerIdCourant, articleId);
+      if (!article) return;
+      titre.textContent = `🗞️ ${article.titre}`;
+      champTitre.value = article.titre;
+      champCategorie.value = article.categorie;
+      champContenu.value = article.contenu;
+      btnSupprimer.classList.remove('hidden');
+    }
+
+    btnValider.addEventListener('click', async () => {
+      const valeurTitre = champTitre.value.trim();
+      const valeurContenu = champContenu.value.trim();
+      if (!valeurTitre) { afficherMsg('Renseigne un titre.'); return; }
+      if (!valeurContenu) { afficherMsg('Renseigne le contenu de l\'article.'); return; }
+
+      const donnees = {
+        titre: valeurTitre,
+        categorie: champCategorie.value,
+        contenu: valeurContenu,
+      };
+
+      btnValider.disabled = true;
+      try {
+        if (articleId) {
+          await ArticleService.modifierArticle(foyerIdCourant, articleId, donnees);
+          window.location.href = `article-detail.html?id=${articleId}`;
+        } else {
+          const utilisateur = AuthService.utilisateurActuel();
+          const article = new Article({
+            ...donnees, source: 'manuel', creePar: utilisateur.uid, dateCreation: new Date().toISOString(),
+          });
+          const id = await ArticleService.ajouterArticle(foyerIdCourant, article);
+          window.location.href = `article-detail.html?id=${id}`;
+        }
+      } catch (err) {
+        afficherMsg(err.message || 'Une erreur est survenue.');
+        btnValider.disabled = false;
+      }
+    });
+
+    btnSupprimer.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement cet article ?')) return;
+      await ArticleService.supprimerArticle(foyerIdCourant, articleId);
+      window.location.href = 'veille.html';
+    });
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+      foyerIdCourant = utilisateur.foyerId;
+      if (articleId) await chargerArticle();
+    });
+  </script>
+
+</body>
+</html>

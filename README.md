@@ -40,9 +40,10 @@ chemin normal de mise en prod.
 | `PROD_API_BASE_URL` | URL du service Cloud Run de prod |
 | `CORS_ALLOWED_ORIGIN` | Origines autorisées, séparées par des virgules |
 
-`FIREBASE_SERVICE_ACCOUNT_JSON` et `STATIC_API_TOKEN` (valeurs sensibles côté backend) ne sont **pas**
-des secrets GitHub — ils vivent uniquement dans Google Secret Manager, référencés par
-`--set-secrets` dans le job `deploy-backend`. Pour récupérer/faire tourner `STATIC_API_TOKEN` :
+`FIREBASE_SERVICE_ACCOUNT_JSON`, `STATIC_API_TOKEN` et `GEMINI_API_KEY` (valeurs sensibles côté
+backend) ne sont **pas** des secrets GitHub — ils vivent uniquement dans Google Secret Manager,
+référencés par `--set-secrets` dans le job `deploy-backend`. Pour récupérer/faire tourner
+`STATIC_API_TOKEN` :
 
 ```bash
 gcloud secrets versions access latest --secret=STATIC_API_TOKEN --project=mindless-c58d3
@@ -62,6 +63,9 @@ gcloud secrets versions access latest --secret=STATIC_API_TOKEN --project=mindle
      service > Générer une nouvelle clé privée, collé sur une seule ligne.
    - `STATIC_API_TOKEN` — un secret généré une fois (`openssl rand -hex 32`), voir "Tester le
      backend sans navigateur" ci-dessous.
+   - `GEMINI_API_KEY` / `GEMINI_MODEL` — clé API Gemini (aistudio.google.com/apikey), utilisée par
+     le module veille pour générer des articles (voir CLAUDE.md). Optionnel si tu ne testes pas
+     `POST .../articles/generer` : la route répond alors 500 plutôt que de planter le serveur.
    - `CORS_ALLOWED_ORIGIN` — origines autorisées, séparées par des virgules (ex.
      `http://localhost:5000` pour l'émulateur Hosting).
 6. `cd backend && npm install`, puis `npm install` à la racine.
@@ -117,6 +121,32 @@ curl http://localhost:3000/api/utilisateurs/moi \
   -H "Authorization: Bearer <STATIC_API_TOKEN>" \
   -H "X-Test-Uid: uid-de-test"
 ```
+
+### API externe (veille) — ajouter un article depuis un script
+
+`POST /api/foyers/:foyerId/articles/externe` est un 4e point d'entrée de création d'article (en
+plus du formulaire manuel, de la génération IA et de l'import `.md` — voir CLAUDE.md section
+"veille"), pensé pour un script ou une automatisation en dehors de l'app plutôt que pour l'UI.
+Toute la logique de création (validation des champs, `dateCreation`...) est centralisée dans
+`ArticleRepository.creer` — les 4 points d'entrée y passent tous, seul `source` change.
+
+**Auth** : même mécanisme que ci-dessus (`STATIC_API_TOKEN` + `X-Test-Uid`), mais réservé au
+créateur du foyer (`requireCreateurFoyer`) — `X-Test-Uid` doit être **ton** uid (celui du foyer
+que tu cibles), pas n'importe quel membre, sinon la route répond 403. Trouve ton uid via la
+Console Firebase (Authentication) ou `GET /api/utilisateurs/moi` avec un vrai ID token.
+
+```bash
+curl -X POST http://localhost:3000/api/foyers/<FOYER_ID>/articles/externe \
+  -H "Authorization: Bearer <STATIC_API_TOKEN>" \
+  -H "X-Test-Uid: <TON_UID>" \
+  -H "Content-Type: application/json" \
+  -d '{"titre": "Mon article", "categorie": "ia", "contenu": "Corps de l'\''article..."}'
+```
+
+Réponse `201 { "id": "..." }` ; `400` si `titre`/`categorie`/`contenu` invalides, `403` si
+`X-Test-Uid` n'est pas le créateur du foyer, `404` si `:foyerId` n'existe pas. Catégories valides :
+voir `backend/src/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
+`sortir_marseille`, `ecologie`, `ia`).
 
 ### Tester le flux complet (frontend + backend + vraies données)
 

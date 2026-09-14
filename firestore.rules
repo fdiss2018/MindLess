@@ -42,6 +42,14 @@ service cloud.firestore {
       match /recettes/{document=**} {
         allow read, write: if false;
       }
+
+      match /articles/{document=**} {
+        allow read, write: if false;
+      }
+
+      match /veilleConfig/{document=**} {
+        allow read, write: if false;
+      }
     }
   }
 }

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Administration</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>🛠️ Administration</h1>
+    <p>Réglages réservés au créateur du foyer.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour à l'accueil</a>
+
+    <p id="acces-refuse" class="msg msg-erreur hidden">
+      Cette page est réservée au créateur du foyer.
+    </p>
+
+    <div class="nav-accueil hidden" id="nav-admin">
+      <a href="veille-parametres.html" class="nav-tuile">
+        <span class="icone">🗞️</span>
+        <span class="titre">Lignes éditoriales</span>
+      </a>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './commun/services/AuthService.js';
+    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { FoyerService } from './commun/services/FoyerService.js';
+
+    AuthService.ecouterAuth(async (user) => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
+      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+
+      const desabonner = FoyerService.ecouterFoyer(utilisateur.foyerId, (foyer) => {
+        desabonner();
+        document.getElementById('chargement').classList.add('hidden');
+
+        if (foyer && foyer.creePar === utilisateur.id) {
+          document.getElementById('nav-admin').classList.remove('hidden');
+        } else {
+          document.getElementById('acces-refuse').classList.remove('hidden');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
