@@ -32,6 +32,22 @@
             <option value="">Toutes les catégories</option>
           </select>
         </div>
+        <div class="champ">
+          <label for="filtre-mot-cle">Mot-clé</label>
+          <select id="filtre-mot-cle" class="input">
+            <option value="">Tous les mots-clés</option>
+          </select>
+        </div>
+      </div>
+      <div class="ligne-champs">
+        <div class="champ">
+          <label for="filtre-date-debut">Depuis le</label>
+          <input type="date" id="filtre-date-debut" class="input">
+        </div>
+        <div class="champ">
+          <label for="filtre-date-fin">Jusqu'au</label>
+          <input type="date" id="filtre-date-fin" class="input">
+        </div>
       </div>
     </div>
 
@@ -78,6 +94,9 @@
     const chargement = document.getElementById('chargement');
     const champRecherche = document.getElementById('recherche');
     const selectFiltreCategorie = document.getElementById('filtre-categorie');
+    const selectFiltreMotCle = document.getElementById('filtre-mot-cle');
+    const champFiltreDateDebut = document.getElementById('filtre-date-debut');
+    const champFiltreDateFin = document.getElementById('filtre-date-fin');
     const selectGenererCategorie = document.getElementById('generer-categorie');
     const champGenererSujet = document.getElementById('generer-sujet');
     const btnGenerer = document.getElementById('btn-generer');
@@ -104,13 +123,32 @@
       return texte.length > 140 ? texte.slice(0, 140).trim() + '…' : texte;
     }
 
-    function correspondAuxFiltres(article, texte, categorie) {
+    function formaterDate(dateCreation) {
+      return new Date(dateCreation).toLocaleDateString('fr-FR');
+    }
+
+    function remplirFiltreMotsCles() {
+      const motCleSelectionne = selectFiltreMotCle.value;
+      const motsCles = [...new Set(tousLesArticles.flatMap((a) => a.motsCles))].sort();
+      selectFiltreMotCle.innerHTML = '<option value="">Tous les mots-clés</option>'
+        + motsCles.map((m) => `<option value="${m}">${m}</option>`).join('');
+      selectFiltreMotCle.value = motsCles.includes(motCleSelectionne) ? motCleSelectionne : '';
+    }
+
+    function correspondAuxFiltres(article, texte, categorie, motCle, dateDebut, dateFin) {
       const t = texte.trim().toLowerCase();
       const correspondTexte = !t
         || article.titre.toLowerCase().includes(t)
         || article.contenu.toLowerCase().includes(t);
       const correspondCategorie = !categorie || article.categorie === categorie;
-      return correspondTexte && correspondCategorie;
+      const correspondMotCle = !motCle || article.motsCles.includes(motCle);
+      // Comparaison sur la partie date (YYYY-MM-DD) de dateCreation, alignée sur le format des
+      // <input type="date"> plutôt que sur l'horodatage complet.
+      const dateArticle = (article.dateCreation || '').slice(0, 10);
+      const correspondDateDebut = !dateDebut || dateArticle >= dateDebut;
+      const correspondDateFin = !dateFin || dateArticle <= dateFin;
+      return correspondTexte && correspondCategorie && correspondMotCle
+        && correspondDateDebut && correspondDateFin;
     }
 
     function afficherListe(articlesAffiches) {
@@ -136,28 +174,39 @@
             <span class="badge badge-gris">${CATEGORIES[article.categorie]?.libelle || article.categorie}</span>
             ${article.source === 'ia' ? '<span class="badge badge-jaune">Généré par IA</span>' : ''}
             ${article.source === 'api' ? '<span class="badge badge-gris">Ajouté via API</span>' : ''}
+            ${article.motsCles.map((m) => `<span class="badge badge-gris">${m}</span>`).join('')}
           </p>
           <p class="carte-desc">${extrait(article.contenu)}</p>
+          <p class="carte-desc">${formaterDate(article.dateCreation)}</p>
         `;
         liste.appendChild(lien);
       });
     }
 
     function appliquerFiltres() {
-      afficherListe(tousLesArticles.filter(
-        (a) => correspondAuxFiltres(a, champRecherche.value, selectFiltreCategorie.value),
-      ));
+      afficherListe(tousLesArticles.filter((a) => correspondAuxFiltres(
+        a,
+        champRecherche.value,
+        selectFiltreCategorie.value,
+        selectFiltreMotCle.value,
+        champFiltreDateDebut.value,
+        champFiltreDateFin.value,
+      )));
     }
 
     async function chargerEtAfficher() {
       chargement.classList.remove('hidden');
       tousLesArticles = await ArticleService.listerArticles(foyerIdCourant);
       chargement.classList.add('hidden');
+      remplirFiltreMotsCles();
       appliquerFiltres();
     }
 
     champRecherche.addEventListener('input', appliquerFiltres);
     selectFiltreCategorie.addEventListener('change', appliquerFiltres);
+    selectFiltreMotCle.addEventListener('change', appliquerFiltres);
+    champFiltreDateDebut.addEventListener('change', appliquerFiltres);
+    champFiltreDateFin.addEventListener('change', appliquerFiltres);
 
     btnGenerer.addEventListener('click', async () => {
       btnGenerer.disabled = true;

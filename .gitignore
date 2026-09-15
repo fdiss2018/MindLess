@@ -27,3 +27,11 @@ node_modules/
 # Divers
 .env
 *.tgz
+
+# Outil veille externe (scripts/veille-externe) — config avec secret + articles réels du foyer,
+# jamais committés (voir config.example.json)
+scripts/veille-externe/config.json
+scripts/veille-externe/articles-a-importer/*.json
+scripts/veille-externe/articles-a-importer/traites/*.json
+__pycache__/
+*.pyc

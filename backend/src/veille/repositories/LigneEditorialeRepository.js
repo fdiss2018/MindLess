@@ -13,7 +13,10 @@ export const LigneEditorialeRepository = {
     return snap.exists ? snap.data() : {};
   },
 
+  // { merge: true } : un futur appelant qui n'enverrait que les catégories modifiées (la route
+  // actuelle envoie toujours les 6) ne doit pas effacer les autres lignes éditoriales déjà
+  // personnalisées — un set() complet le ferait silencieusement.
   async enregistrer(foyerId, lignesEditoriales) {
-    await docRef(foyerId).set({ ...lignesEditoriales, dateMaj: new Date().toISOString() });
+    await docRef(foyerId).set({ ...lignesEditoriales, dateMaj: new Date().toISOString() }, { merge: true });
   },
 };

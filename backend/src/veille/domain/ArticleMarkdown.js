@@ -14,19 +14,23 @@ function parserEntetes(bloc) {
   return entetes;
 }
 
-// Extrait { titre, categorie, contenu } d'un fichier .md avec front-matter :
+// Extrait { titre, categorie, contenu, motsCles } d'un fichier .md avec front-matter :
 //   ---
 //   titre: Mon article
 //   categorie: ia
+//   motsCles: mcp, claude, anthropic
 //   ---
 //   Corps de l'article...
-// Retourne titre/categorie à null si le front-matter est absent ou incomplet — la route
-// (routes/articles.js) décide alors de rejeter l'import (400) plutôt que de créer un article
-// partiel.
+// `motsCles` est optionnel (chaîne brute séparée par des virgules, à normaliser par l'appelant via
+// Article.normaliserMotsCles). Retourne titre/categorie à null si le front-matter est absent ou
+// incomplet — la route (routes/articles.js) décide alors de rejeter l'import (400) plutôt que de
+// créer un article partiel.
 export function parserMarkdown(contenuBrut) {
   const correspondance = REGEX_FRONT_MATTER.exec(contenuBrut || '');
   if (!correspondance) {
-    return { titre: null, categorie: null, contenu: (contenuBrut || '').trim() };
+    return {
+      titre: null, categorie: null, contenu: (contenuBrut || '').trim(), motsCles: '',
+    };
   }
 
   const entetes = parserEntetes(correspondance[1]);
@@ -34,5 +38,6 @@ export function parserMarkdown(contenuBrut) {
     titre: entetes.titre || null,
     categorie: entetes.categorie || null,
     contenu: correspondance[2].trim(),
+    motsCles: entetes.motsCles || '',
   };
 }

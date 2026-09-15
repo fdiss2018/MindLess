@@ -1,0 +1,6 @@
+{
+  "apiBaseUrl": "https://mindless-backend-428494497216.europe-west1.run.app",
+  "foyerId": "<code du foyer, ex. A3F7K9 — voir foyer.html>",
+  "staticApiToken": "<STATIC_API_TOKEN de production, voir README.md racine du repo>",
+  "uid": "<ton uid Firebase, doit être le créateur du foyer — voir GET /api/utilisateurs/moi>"
+}

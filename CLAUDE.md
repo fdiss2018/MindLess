@@ -195,11 +195,21 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
 - **Génération IA** (`POST .../articles/generer`) : appelle l'API Gemini via
   `repositories/GeminiClient.js`, qui reprend le pattern déjà en place dans le repo frère `homeFit`
   (`backend/src/services/GeminiClient.js`) — `fetch` natif (pas de SDK), clé en query param
-  (`GEMINI_API_KEY`), `responseSchema` structuré pour extraire `{titre, contenu}`, retry sur
-  `TIMEOUT`/`DEGENERE` uniquement. **Limite assumée** : un LLM sans accès web ne peut pas rapporter
-  de vraies actualités en temps réel — les articles `source: 'ia'` sont marqués d'un badge
-  "Généré par IA" côté front (`veille.html`, `article-detail.html`) plutôt que présentés comme du
-  factuel vérifié. Ouvert à tout membre du foyer.
+  (`GEMINI_API_KEY`), `responseSchema` structuré pour extraire `{titre, contenu, contenuAudio}`,
+  retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement générées** (voir
+  `Article.contenuAudio`) : `contenu` (à lire à l'écran, plusieurs paragraphes) et `contenuAudio`
+  (même information réécrite pour l'oral — phrases courtes, sans sigle non prononçable, sans
+  symbole de mise en forme) ; seuls les articles `source: 'ia'` ont un `contenuAudio` distinct, les
+  3 autres points d'entrée n'ont qu'un seul texte. **Limite assumée et déjà éprouvée** : un LLM
+  sans recherche web ne peut pas rapporter de vraies actualités datées — le grounding Google Search
+  (`tools: google_search`) a été testé et écarté (429 systématique sur le modèle courant en tier
+  gratuit, limite actuellement documentée côté Google, pas un bug de ce repo). Le prompt interdit
+  donc explicitement toute formule laissant croire à une actualité datée ("cette semaine",
+  "synthèse hebdomadaire"...) et assume produire des repères de fond plutôt que des dépêches ;
+  fournir un `sujet` précis améliore nettement la spécificité du résultat par rapport à une
+  catégorie seule. Les articles `source: 'ia'` sont marqués d'un badge "Généré par IA" côté front
+  (`veille.html`, `article-detail.html`) plutôt que présentés comme du factuel vérifié. Ouvert à
+  tout membre du foyer.
 - **Import `.md`** (`POST .../articles/importer-md`) : un fichier à la fois, avec front-matter
   minimal parsé à la main (`domain/ArticleMarkdown.js`, pas de dépendance YAML) :
   ```
@@ -222,7 +232,8 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
 (`article-detail.html`) ou s'écoute via le bouton "🔊 Écouter", qui appelle l'API Web Speech du
 navigateur (`speechSynthesis`, `services/LectureVocaleService.js`) — gratuite, 100% côté client,
 aucune dépendance/coût backend, mais qualité de voix variable selon l'OS/navigateur et pas de
-fichier audio téléchargeable.
+fichier audio téléchargeable. Le bouton lit `article.contenuAudio` en priorité, et ne retombe sur
+`article.contenu` que pour les articles sans version audio dédiée (manuel/import `.md`/API).
 
 Pas de lecture temps réel (`onSnapshot`) sur `articles` : la bibliothèque d'un foyer reste petite,
 `veille.html` filtre par catégorie/recherche côté client comme `recettes.html` filtre par tag.
@@ -285,7 +296,8 @@ foyers/{foyerId}/listeCourses/{itemId}              # collection plate = éditio
   { nom, quantite, unite, categorie, coche, origine: 'manuel'|'recette'|'mixte', recetteIds: [] }
 
 foyers/{foyerId}/articles/{articleId}
-  { titre, categorie, contenu, source: 'manuel'|'ia'|'import_md', creePar, dateCreation }
+  { titre, categorie, contenu, contenuAudio: string|null, source: 'manuel'|'ia'|'import_md'|'api',
+    creePar, dateCreation }                             # contenuAudio non null seulement si source: 'ia'
 
 foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une collection
   { [categorie]: texte, ..., dateMaj }              # clé absente = valeur par défaut (voir Categories.js)
@@ -393,7 +405,14 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
 - Veille : pas de limite de coût/fréquence sur `POST .../articles/generer` (appel Gemini payant
   au-delà du quota gratuit) — à ajouter si l'usage le justifie
 - Veille : aucune source d'actualité réelle (recherche web/agrégateur de news) — la génération IA
-  reste un modèle de langage sans accès temps réel, voir la limite documentée plus haut
+  reste un modèle de langage sans accès temps réel, voir la limite documentée plus haut. Le
+  grounding Gemini (`tools: google_search`) a été essayé (2026-09) et écarté : 429 systématique en
+  tier gratuit sur `gemini-flash-lite-latest` (résolu en `gemini-3.5-flash-lite`), problème
+  documenté côté Google (forums développeurs), pas un souci de configuration ici — à retester si
+  Google stabilise ça, ou si la facturation est activée (sans garantie que ça suffise). En
+  attendant, `scripts/veille-externe/` documente une solution palliative manuelle : un Gem Gemini
+  (recherche web réelle, côté produit consommateur) produit un JSON au format attendu, poussé vers
+  `POST .../articles/externe` via `envoyer_article.py`.
 
 ---
 

@@ -17,9 +17,10 @@ describe('construireRequeteArticleIA', () => {
     expect(requete.contents[0].parts[0].text).toContain('exposition Cézanne');
   });
 
-  it('demande une réponse JSON structurée avec titre et contenu', () => {
+  it('demande une réponse JSON structurée avec titre, contenu, contenuAudio et motsCles', () => {
     const requete = construireRequeteArticleIA({ categorie: 'marseille' });
-    expect(requete.generationConfig.responseSchema.required).toEqual(['titre', 'contenu']);
+    expect(requete.generationConfig.responseSchema.required)
+      .toEqual(['titre', 'contenu', 'contenuAudio', 'motsCles']);
   });
 
   it('utilise la ligne éditoriale personnalisée à la place du prompt générique quand elle est fournie', () => {
@@ -61,19 +62,39 @@ describe('construireRequeteArticleIA', () => {
     expect(texte).toContain('Résumé du premier article.');
     expect(texte).toContain('"Claude Code évolue"');
   });
+
+  it('interdit explicitement les formules laissant croire à une actualité datée ("cette semaine"...)', () => {
+    const requete = construireRequeteArticleIA({ categorie: 'ia' });
+    expect(requete.contents[0].parts[0].text).toContain('"cette semaine"');
+  });
 });
 
 describe('validerArticleIA', () => {
-  it('accepte une réponse avec titre et contenu', () => {
-    expect(validerArticleIA({ titre: 'Titre', contenu: 'Contenu.' }))
-      .toEqual({ titre: 'Titre', contenu: 'Contenu.' });
+  it('accepte une réponse avec titre, contenu, contenuAudio et motsCles', () => {
+    expect(validerArticleIA({
+      titre: 'Titre', contenu: 'Contenu.', contenuAudio: 'Contenu à l\'oral.', motsCles: ['mcp', 'claude'],
+    })).toEqual({
+      titre: 'Titre', contenu: 'Contenu.', contenuAudio: 'Contenu à l\'oral.', motsCles: ['mcp', 'claude'],
+    });
+  });
+
+  it('retombe sur un tableau vide si motsCles est absent ou mal formé', () => {
+    expect(validerArticleIA({ titre: 'Titre', contenu: 'Contenu.', contenuAudio: 'Audio.' }).motsCles)
+      .toEqual([]);
+    expect(validerArticleIA({
+      titre: 'Titre', contenu: 'Contenu.', contenuAudio: 'Audio.', motsCles: 'pas-un-tableau',
+    }).motsCles).toEqual([]);
   });
 
   it('rejette une réponse sans titre', () => {
-    expect(() => validerArticleIA({ contenu: 'Contenu.' })).toThrow();
+    expect(() => validerArticleIA({ contenu: 'Contenu.', contenuAudio: 'Contenu à l\'oral.' })).toThrow();
   });
 
   it('rejette une réponse sans contenu', () => {
-    expect(() => validerArticleIA({ titre: 'Titre' })).toThrow();
+    expect(() => validerArticleIA({ titre: 'Titre', contenuAudio: 'Contenu à l\'oral.' })).toThrow();
+  });
+
+  it('rejette une réponse sans contenuAudio', () => {
+    expect(() => validerArticleIA({ titre: 'Titre', contenu: 'Contenu.' })).toThrow();
   });
 });

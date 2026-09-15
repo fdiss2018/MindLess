@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { ArticleRepository } from '../repositories/ArticleRepository.js';
 import { GeminiClient } from '../repositories/GeminiClient.js';
 import { LigneEditorialeRepository } from '../repositories/LigneEditorialeRepository.js';
-import { validerChampsArticle, extraireResume } from '../domain/Article.js';
+import { validerChampsArticle, extraireResume, normaliserMotsCles } from '../domain/Article.js';
 import { parserMarkdown } from '../domain/ArticleMarkdown.js';
 import { categorieValide, LIGNES_EDITORIALES_PAR_DEFAUT } from '../domain/Categories.js';
 import { requireUid } from '../../commun/middleware/requireUid.js';
@@ -37,12 +37,14 @@ articlesRouter.get('/', async (req, res, next) => {
 
 articlesRouter.post('/', async (req, res, next) => {
   try {
-    const { titre, categorie, contenu } = req.body;
+    const {
+      titre, categorie, contenu, motsCles,
+    } = req.body;
     const erreur = validerChampsArticle({ titre, categorie, contenu });
     if (erreur) return res.status(400).json({ erreur });
 
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, source: 'manuel', creePar: req.uid,
+      titre, categorie, contenu, motsCles: normaliserMotsCles(motsCles), source: 'manuel', creePar: req.uid,
     });
     res.status(201).json({ id });
   } catch (err) { next(err); }
@@ -64,25 +66,34 @@ articlesRouter.post('/generer', async (req, res, next) => {
       return res.status(500).json({ erreur: 'Génération IA non configurée (GEMINI_API_KEY manquante).' });
     }
 
-    const lignesPersonnalisees = await LigneEditorialeRepository.obtenir(req.params.foyerId);
+    // Les deux lectures ci-dessous sont indépendantes (l'une porte sur veilleConfig, l'autre sur
+    // articles) : lancées en parallèle plutôt qu'en série pour ne pas payer deux allers-retours
+    // Firestore l'un après l'autre à chaque génération.
+    const [lignesPersonnalisees, tousLesArticles] = await Promise.all([
+      LigneEditorialeRepository.obtenir(req.params.foyerId),
+      ArticleRepository.lister(req.params.foyerId),
+    ]);
     const ligneEditoriale = lignesPersonnalisees[categorie] ?? LIGNES_EDITORIALES_PAR_DEFAUT[categorie];
 
     // Contexte de continuité : les derniers articles déjà publiés sur cette catégorie (déjà triés
     // par dateCreation décroissante par ArticleRepository.lister), résumés pour ne pas gonfler le
     // prompt avec le contenu intégral de chacun.
-    const tousLesArticles = await ArticleRepository.lister(req.params.foyerId);
     const articlesPrecedents = tousLesArticles
       .filter((a) => a.categorie === categorie)
       .slice(0, NB_ARTICLES_CONTEXTE)
       .map((a) => ({ titre: a.titre, dateCreation: a.dateCreation, extrait: extraireResume(a.contenu) }));
 
-    const { titre, contenu } = await GeminiClient.genererArticleParIA({
+    const {
+      titre, contenu, contenuAudio, motsCles,
+    } = await GeminiClient.genererArticleParIA({
       categorie, sujet, ligneEditoriale, articlesPrecedents,
     });
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, source: 'ia', creePar: req.uid,
+      titre, categorie, contenu, contenuAudio, motsCles, source: 'ia', creePar: req.uid,
     });
-    res.status(201).json({ id, titre, contenu });
+    res.status(201).json({
+      id, titre, contenu, contenuAudio, motsCles,
+    });
   } catch (err) { next(err); }
 });
 
@@ -92,7 +103,9 @@ articlesRouter.post('/generer', async (req, res, next) => {
 // format .md plutôt que le message générique.
 articlesRouter.post('/importer-md', async (req, res, next) => {
   try {
-    const { titre, categorie, contenu } = parserMarkdown(req.body.contenu);
+    const {
+      titre, categorie, contenu, motsCles,
+    } = parserMarkdown(req.body.contenu);
     if (validerChampsArticle({ titre, categorie, contenu })) {
       return res.status(400).json({
         erreur: "Fichier .md invalide : le front-matter doit renseigner 'titre' et 'categorie' (valeur valide), suivi du contenu de l'article.",
@@ -100,7 +113,7 @@ articlesRouter.post('/importer-md', async (req, res, next) => {
     }
 
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, source: 'import_md', creePar: req.uid,
+      titre, categorie, contenu, motsCles: normaliserMotsCles(motsCles), source: 'import_md', creePar: req.uid,
     });
     res.status(201).json({ id, titre, categorie });
   } catch (err) { next(err); }
@@ -109,14 +122,24 @@ articlesRouter.post('/importer-md', async (req, res, next) => {
 // API REST externe — pensée pour un script/une automatisation en dehors de l'app (pas l'UI), donc
 // réservée au créateur du foyer (requireCreateurFoyer) plutôt qu'ouverte à tout membre comme les 3
 // points d'entrée ci-dessus. Authentification : STATIC_API_TOKEN + X-Test-Uid (voir README.md).
+// Accepte optionnellement contenuAudio et motsCles, pour un article produit par un outil externe
+// (ex. un Gem Gemini avec recherche web) qui fournit déjà les deux versions et des mots-clés.
 articlesRouter.post('/externe', requireCreateurFoyer, async (req, res, next) => {
   try {
-    const { titre, categorie, contenu } = req.body;
+    const {
+      titre, categorie, contenu, contenuAudio, motsCles,
+    } = req.body;
     const erreur = validerChampsArticle({ titre, categorie, contenu });
     if (erreur) return res.status(400).json({ erreur });
 
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, source: 'api', creePar: req.uid,
+      titre,
+      categorie,
+      contenu,
+      contenuAudio: contenuAudio || null,
+      motsCles: normaliserMotsCles(motsCles),
+      source: 'api',
+      creePar: req.uid,
     });
     res.status(201).json({ id });
   } catch (err) { next(err); }
@@ -130,15 +153,39 @@ articlesRouter.get('/:articleId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Liste blanche des champs modifiables — sans ça, req.body passé tel quel à Firestore laisserait
+// n'importe quel membre réécrire `creePar` (usurper la paternité d'un article, et donc contourner
+// la restriction "seul le créateur peut supprimer" ci-dessous) ou `source`/`dateCreation`.
+const CHAMPS_MODIFIABLES = ['titre', 'categorie', 'contenu', 'contenuAudio', 'motsCles'];
+
 articlesRouter.put('/:articleId', async (req, res, next) => {
   try {
-    await ArticleRepository.modifier(req.params.foyerId, req.params.articleId, req.body);
+    const donnees = {};
+    for (const champ of CHAMPS_MODIFIABLES) {
+      if (champ in req.body) donnees[champ] = req.body[champ];
+    }
+    if (typeof donnees.categorie === 'string' && !categorieValide(donnees.categorie)) {
+      return res.status(400).json({ erreur: 'Catégorie invalide.' });
+    }
+    if ('motsCles' in donnees) donnees.motsCles = normaliserMotsCles(donnees.motsCles);
+
+    await ArticleRepository.modifier(req.params.foyerId, req.params.articleId, donnees);
     res.status(204).end();
   } catch (err) { next(err); }
 });
 
+// Réservé au créateur de CET article (article.creePar), pas au créateur du foyer — une distinction
+// différente de requireCreateurFoyer (qui porte sur foyer.creePar, voir commun/middleware). Chaque
+// auteur ne supprime que ce qu'il a lui-même créé/généré/importé ; les autres membres du foyer
+// gardent le droit de créer et modifier des articles, juste pas de supprimer ceux des autres.
 articlesRouter.delete('/:articleId', async (req, res, next) => {
   try {
+    const article = await ArticleRepository.obtenir(req.params.foyerId, req.params.articleId);
+    if (!article) return res.status(404).json({ erreur: 'Article introuvable.' });
+    if (article.creePar !== req.uid) {
+      return res.status(403).json({ erreur: 'Seul le créateur de cet article peut le supprimer.' });
+    }
+
     await ArticleRepository.supprimer(req.params.foyerId, req.params.articleId);
     res.status(204).end();
   } catch (err) { next(err); }
