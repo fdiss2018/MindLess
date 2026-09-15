@@ -44,6 +44,21 @@ describe('calculerPortionsConsommees', () => {
     expect(resultat.portionsParGroupe.proteinesAnimales).toBeCloseTo(0.5); // 1 portion / 2 parts
   });
 
+  it("normalise l'unité (casse, espaces superflus) avant de la convertir en grammes", () => {
+    const recetteAvecCasseUnite = {
+      id: 'r3',
+      portions: 2,
+      ingredients: [{ nom: 'tomate', quantite: 200, unite: ' Kg ' }],
+    };
+    const planning = planningAvec({
+      lundi: { midi: { texte: null, recetteId: 'r3' }, soir: { texte: null, recetteId: null } },
+    });
+
+    const resultat = calculerPortionsConsommees(planning, { r3: recetteAvecCasseUnite });
+    // 200 Kg = 200000 g, / 100 (portionReferenceG tomate) = 2000 portions totales / 2 parts = 1000
+    expect(resultat.portionsParGroupe.legumes).toBeCloseTo(1000);
+  });
+
   it('ignore les créneaux dont la recette référencée est introuvable', () => {
     const planning = planningAvec({
       lundi: { midi: { texte: null, recetteId: 'inconnue' }, soir: { texte: null, recetteId: null } },

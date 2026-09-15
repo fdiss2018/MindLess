@@ -8,7 +8,13 @@ describe('parserMarkdown', () => {
       titre: 'Mon article',
       categorie: 'ia',
       contenu: 'Premier paragraphe.\n\nDeuxième paragraphe.',
+      motsCles: '',
     });
+  });
+
+  it('extrait les mots-clés bruts (chaîne séparée par des virgules) depuis le front-matter', () => {
+    const brut = '---\ntitre: Mon article\ncategorie: ia\nmotsCles: mcp, claude, anthropic\n---\nContenu.';
+    expect(parserMarkdown(brut).motsCles).toBe('mcp, claude, anthropic');
   });
 
   it('retourne titre/categorie à null quand le front-matter est absent', () => {
@@ -25,6 +31,8 @@ describe('parserMarkdown', () => {
 
   it('gère les fins de ligne CRLF', () => {
     const brut = '---\r\ntitre: Test\r\ncategorie: culture\r\n---\r\nContenu.';
-    expect(parserMarkdown(brut)).toEqual({ titre: 'Test', categorie: 'culture', contenu: 'Contenu.' });
+    expect(parserMarkdown(brut)).toEqual({
+      titre: 'Test', categorie: 'culture', contenu: 'Contenu.', motsCles: '',
+    });
   });
 });

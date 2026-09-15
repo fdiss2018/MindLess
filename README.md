@@ -238,3 +238,4 @@ dans cet ordre après un changement d'URL backend.
 | Variables d'environnement backend | `backend/.env.example` |
 | Config Firebase / URL backend côté front | `public/firebase-config.example.js`, `public/api-config.example.js` |
 | Règles d'accès Firestore | `firestore.rules` |
+| Solution palliative veille IA (Gem Gemini + script Python, en attendant le grounding) | `scripts/veille-externe/README.md` |

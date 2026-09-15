@@ -103,8 +103,14 @@
 
     btnValider.addEventListener('click', async () => {
       const date = document.getElementById('date').value;
-      const kilometrage = Number(document.getElementById('kilometrage').value);
-      if (!date || !kilometrage) { afficherMsg('Renseigne au moins la date et le kilométrage.'); return; }
+      const champKilometrage = document.getElementById('kilometrage').value;
+      const kilometrage = Number(champKilometrage);
+      // champKilometrage === '' plutôt que !kilometrage : un kilométrage de 0 (première vidange
+      // d'un véhicule neuf) est une valeur valide, pas une valeur manquante.
+      if (!date || champKilometrage === '' || Number.isNaN(kilometrage)) {
+        afficherMsg('Renseigne au moins la date et le kilométrage.');
+        return;
+      }
 
       const donnees = {
         type: selectType.value,

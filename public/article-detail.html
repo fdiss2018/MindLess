@@ -49,6 +49,7 @@
       btnEcouter.title = "Synthèse vocale non disponible sur ce navigateur.";
     }
 
+    let articleCourant = null;
     let enLecture = false;
     btnEcouter.addEventListener('click', () => {
       if (enLecture) {
@@ -57,7 +58,9 @@
         enLecture = false;
         return;
       }
-      LectureVocaleService.lire(document.getElementById('contenu').textContent);
+      // contenuAudio (réécrit pour l'oral par la génération IA) en priorité, sinon contenu tel
+      // quel — seuls les articles générés par IA ont une version audio dédiée.
+      LectureVocaleService.lire(articleCourant.contenuAudio || articleCourant.contenu);
       btnEcouter.textContent = '⏹️ Arrêter';
       enLecture = true;
     });
@@ -70,12 +73,15 @@
       const article = await ArticleService.obtenirArticle(utilisateur.foyerId, articleId);
       document.getElementById('chargement').classList.add('hidden');
       if (!article) { window.location.href = 'veille.html'; return; }
+      articleCourant = article;
 
       document.getElementById('titre').textContent = `🗞️ ${article.titre}`;
       document.getElementById('sous-titre').innerHTML = `
         <span class="badge badge-gris">${CATEGORIES[article.categorie]?.libelle || article.categorie}</span>
         ${article.source === 'ia' ? '<span class="badge badge-jaune">Généré par IA — à vérifier</span>' : ''}
         ${article.source === 'api' ? '<span class="badge badge-gris">Ajouté via API</span>' : ''}
+        ${article.motsCles.map((m) => `<span class="badge badge-gris">${m}</span>`).join('')}
+        <br>${new Date(article.dateCreation).toLocaleDateString('fr-FR')}
       `;
       document.getElementById('contenu').textContent = article.contenu;
       if (LectureVocaleService.estDisponible()) btnEcouter.disabled = false;

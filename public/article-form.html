@@ -29,6 +29,10 @@
         <label for="champ-contenu">Contenu</label>
         <textarea id="champ-contenu" class="input" rows="10"></textarea>
       </div>
+      <div class="champ">
+        <label for="champ-mots-cles">Mots-clés (séparés par une virgule)</label>
+        <input type="text" id="champ-mots-cles" class="input" placeholder="Ex. MCP, Claude, Anthropic">
+      </div>
 
       <button id="btn-valider" class="btn-primaire btn-large">Enregistrer</button>
       <button id="btn-supprimer" class="btn-danger btn-large hidden" style="margin-top:8px">Supprimer cet article</button>
@@ -50,6 +54,7 @@
     const champTitre = document.getElementById('champ-titre');
     const champCategorie = document.getElementById('champ-categorie');
     const champContenu = document.getElementById('champ-contenu');
+    const champMotsCles = document.getElementById('champ-mots-cles');
     const btnValider = document.getElementById('btn-valider');
     const btnSupprimer = document.getElementById('btn-supprimer');
     const msg = document.getElementById('msg');
@@ -73,7 +78,13 @@
       champTitre.value = article.titre;
       champCategorie.value = article.categorie;
       champContenu.value = article.contenu;
-      btnSupprimer.classList.remove('hidden');
+      champMotsCles.value = article.motsCles.join(', ');
+      // Suppression réservée au créateur de CET article (article.creePar), pas à tout membre du
+      // foyer — voir requireCreateurArticle côté backend (routes/articles.js DELETE).
+      const utilisateur = AuthService.utilisateurActuel();
+      if (article.creePar === utilisateur.uid) {
+        btnSupprimer.classList.remove('hidden');
+      }
     }
 
     btnValider.addEventListener('click', async () => {
@@ -86,6 +97,7 @@
         titre: valeurTitre,
         categorie: champCategorie.value,
         contenu: valeurContenu,
+        motsCles: champMotsCles.value.split(',').map((m) => m.trim()).filter(Boolean),
       };
 
       btnValider.disabled = true;

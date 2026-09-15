@@ -60,9 +60,18 @@ listeCoursesRouter.patch('/:itemId/coche', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Liste blanche des champs modifiables — sans ça, req.body passé tel quel à Firestore
+// laisserait n'importe quel membre réécrire dateAjout.
+const CHAMPS_MODIFIABLES = ['nom', 'quantite', 'unite', 'categorie', 'coche', 'origine', 'recetteIds'];
+
 listeCoursesRouter.patch('/:itemId', async (req, res, next) => {
   try {
-    await ListeCoursesRepository.modifier(req.params.foyerId, req.params.itemId, req.body);
+    const donnees = {};
+    for (const champ of CHAMPS_MODIFIABLES) {
+      if (champ in req.body) donnees[champ] = req.body[champ];
+    }
+    donnees.dateMaj = new Date().toISOString();
+    await ListeCoursesRepository.modifier(req.params.foyerId, req.params.itemId, donnees);
     res.status(204).end();
   } catch (err) { next(err); }
 });

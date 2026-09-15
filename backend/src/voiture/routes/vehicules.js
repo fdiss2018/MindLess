@@ -34,9 +34,17 @@ vehiculesRouter.get('/:vehiculeId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Liste blanche des champs modifiables — sans ça, req.body passé tel quel à Firestore
+// laisserait n'importe quel membre réécrire creePar/dateCreation.
+const CHAMPS_MODIFIABLES = ['nom', 'marque', 'modele', 'immatriculation', 'kilometrageActuel', 'dateMajKilometrage'];
+
 vehiculesRouter.put('/:vehiculeId', async (req, res, next) => {
   try {
-    await VehiculeRepository.modifier(req.params.foyerId, req.params.vehiculeId, req.body);
+    const donnees = {};
+    for (const champ of CHAMPS_MODIFIABLES) {
+      if (champ in req.body) donnees[champ] = req.body[champ];
+    }
+    await VehiculeRepository.modifier(req.params.foyerId, req.params.vehiculeId, donnees);
     res.status(204).end();
   } catch (err) { next(err); }
 });

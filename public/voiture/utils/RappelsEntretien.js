@@ -5,7 +5,13 @@ const SEUIL_JOURS_PROCHE = 30;
 
 function ajouterMois(dateIso, mois) {
   const d = new Date(dateIso);
+  const jourOriginal = d.getDate();
   d.setMonth(d.getMonth() + mois);
+  // Si le jour d'origine n'existe pas dans le mois cible (ex. 29 février + 12 mois, l'année
+  // cible n'étant pas bissextile), Date déborde silencieusement sur le mois suivant (1er mars)
+  // au lieu de caler sur le dernier jour du mois visé — setDate(0) revient au dernier jour du
+  // mois précédant celui, déjà trop avancé, sur lequel Date a débordé.
+  if (d.getDate() !== jourOriginal) d.setDate(0);
   return d;
 }
 

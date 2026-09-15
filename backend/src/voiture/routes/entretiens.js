@@ -29,13 +29,21 @@ entretiensRouter.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Liste blanche des champs modifiables — sans ça, req.body passé tel quel à Firestore
+// laisserait n'importe quel membre réécrire creePar/dateCreation.
+const CHAMPS_MODIFIABLES = ['type', 'date', 'kilometrage', 'cout', 'garage', 'notes'];
+
 entretiensRouter.put('/:entretienId', async (req, res, next) => {
   try {
+    const donnees = {};
+    for (const champ of CHAMPS_MODIFIABLES) {
+      if (champ in req.body) donnees[champ] = req.body[champ];
+    }
     await EntretienRepository.modifier(
       req.params.foyerId,
       req.params.vehiculeId,
       req.params.entretienId,
-      req.body,
+      donnees,
     );
     res.status(204).end();
   } catch (err) { next(err); }
