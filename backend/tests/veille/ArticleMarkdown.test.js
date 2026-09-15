@@ -8,8 +8,23 @@ describe('parserMarkdown', () => {
       titre: 'Mon article',
       categorie: 'ia',
       contenu: 'Premier paragraphe.\n\nDeuxième paragraphe.',
+      contenuAudio: null,
       motsCles: '',
     });
+  });
+
+  it("sépare contenu et contenuAudio quand le corps contient un séparateur --- AUDIO ---", () => {
+    const brut = '---\ntitre: Mon article\ncategorie: ia\n---\nVersion à lire.\n\n--- AUDIO ---\nVersion à écouter.';
+    const resultat = parserMarkdown(brut);
+    expect(resultat.contenu).toBe('Version à lire.');
+    expect(resultat.contenuAudio).toBe('Version à écouter.');
+  });
+
+  it('reconnaît le séparateur audio même avec une casse et un nombre de tirets différents', () => {
+    const brut = '---\ntitre: Mon article\ncategorie: ia\n---\nLecture.\n\n----audio----\nEcoute.';
+    const resultat = parserMarkdown(brut);
+    expect(resultat.contenu).toBe('Lecture.');
+    expect(resultat.contenuAudio).toBe('Ecoute.');
   });
 
   it('extrait les mots-clés bruts (chaîne séparée par des virgules) depuis le front-matter', () => {
@@ -32,7 +47,14 @@ describe('parserMarkdown', () => {
   it('gère les fins de ligne CRLF', () => {
     const brut = '---\r\ntitre: Test\r\ncategorie: culture\r\n---\r\nContenu.';
     expect(parserMarkdown(brut)).toEqual({
-      titre: 'Test', categorie: 'culture', contenu: 'Contenu.', motsCles: '',
+      titre: 'Test', categorie: 'culture', contenu: 'Contenu.', contenuAudio: null, motsCles: '',
     });
+  });
+
+  it('reconnaît le séparateur audio avec des fins de ligne CRLF', () => {
+    const brut = '---\r\ntitre: Test\r\ncategorie: culture\r\n---\r\nLecture.\r\n\r\n--- AUDIO ---\r\nEcoute.';
+    const resultat = parserMarkdown(brut);
+    expect(resultat.contenu).toBe('Lecture.');
+    expect(resultat.contenuAudio).toBe('Ecoute.');
   });
 });

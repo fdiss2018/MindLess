@@ -104,7 +104,7 @@ articlesRouter.post('/generer', async (req, res, next) => {
 articlesRouter.post('/importer-md', async (req, res, next) => {
   try {
     const {
-      titre, categorie, contenu, motsCles,
+      titre, categorie, contenu, contenuAudio, motsCles,
     } = parserMarkdown(req.body.contenu);
     if (validerChampsArticle({ titre, categorie, contenu })) {
       return res.status(400).json({
@@ -113,7 +113,7 @@ articlesRouter.post('/importer-md', async (req, res, next) => {
     }
 
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, motsCles: normaliserMotsCles(motsCles), source: 'import_md', creePar: req.uid,
+      titre, categorie, contenu, contenuAudio, motsCles: normaliserMotsCles(motsCles), source: 'import_md', creePar: req.uid,
     });
     res.status(201).json({ id, titre, categorie });
   } catch (err) { next(err); }

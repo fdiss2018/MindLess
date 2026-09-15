@@ -216,12 +216,18 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   ---
   titre: Mon article
   categorie: ia
+  motsCles: mcp, claude, anthropic
   ---
-  Corps de l'article...
+  Corps de l'article, à lire à l'écran...
+
+  --- AUDIO ---
+  Même contenu réécrit pour être écouté (optionnel — absent, contenuAudio reste `null` et le
+  bouton "Écouter" retombe sur le texte à lire, comme les articles manuels/API)...
   ```
-  Contrairement à l'import JSON en lot des recettes, une entrée invalide fait échouer tout
-  l'import (400) plutôt que d'être silencieusement ignorée — un seul article par fichier. Ouvert à
-  tout membre du foyer.
+  `motsCles` et le séparateur `--- AUDIO ---` (tirets flexibles, insensible à la casse) sont tous
+  deux optionnels. Contrairement à l'import JSON en lot des recettes, une entrée invalide fait
+  échouer tout l'import (400) plutôt que d'être silencieusement ignorée — un seul article par
+  fichier. Ouvert à tout membre du foyer. Exemple complet : `exemple/article-titres-01net.md`.
 - **API externe** (`POST .../articles/externe`) : pensée pour un script/une automatisation en
   dehors de l'app (pas l'UI) — voir README.md "API externe (veille)" pour l'authentification
   (`STATIC_API_TOKEN` + `X-Test-Uid`) et un exemple `curl`. **Seul point d'entrée réservé au
