@@ -60,6 +60,16 @@ describe('calculerRappels', () => {
     expect(pneus.statut).toBe('ok');
   });
 
+  it('gère un dernier entretien au 29 février sans déborder d\'un jour sur l\'année suivante', () => {
+    // 2025 n'est pas bissextile : l'échéance à 12 mois doit être calée sur le 28/02/2025, pas
+    // déborder sur le 01/03/2025 (bug de Date.setMonth sur un jour qui n'existe pas dans le mois
+    // cible). Kilométrage proche pour isoler le critère de date.
+    const entretiens = [{ type: 'vidange', date: '2024-02-29', kilometrage: 40000 }];
+    const rappels = calculerRappels(vehicule(40100), entretiens, new Date('2025-02-28'));
+    const vidange = rappels.find(r => r.type === 'vidange');
+    expect(vidange.joursRestants).toBeLessThanOrEqual(0);
+  });
+
   it('exclut le type "autre" qui n\'a aucun intervalle défini', () => {
     const rappels = calculerRappels(vehicule(10000), [], new Date('2026-07-08'));
     expect(rappels.find(r => r.type === 'autre')).toBeUndefined();

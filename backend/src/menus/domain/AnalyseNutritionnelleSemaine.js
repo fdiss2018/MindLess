@@ -3,8 +3,12 @@ import { classerIngredient } from './ReferentielAlimentaire.js';
 const GROUPES_SUIVIS = ['legumes', 'fruits', 'feculents', 'legumineuses', 'proteinesAnimales', 'produitsLaitiers'];
 
 function portionsGrammage(quantite, unite, portionReferenceG) {
-  if (unite === 'g') return quantite / portionReferenceG;
-  if (unite === 'kg') return (quantite * 1000) / portionReferenceG;
+  // Normalisé (espaces + casse) : l'unité vient d'un champ texte libre saisi à la main
+  // (recette-form.html), "Kg"/"G "/etc. ne doivent pas silencieusement retomber sur
+  // l'approximation "1 portion" ci-dessous faute de correspondance exacte.
+  const uniteNormalisee = (unite || '').trim().toLowerCase();
+  if (uniteNormalisee === 'g') return quantite / portionReferenceG;
+  if (uniteNormalisee === 'kg') return (quantite * 1000) / portionReferenceG;
   // Unité non convertible en grammes (pièce, botte, cuillère...) : une
   // occurrence de l'ingrédient dans la recette compte pour 1 portion —
   // approximation assumée du mode "portions par groupe".
