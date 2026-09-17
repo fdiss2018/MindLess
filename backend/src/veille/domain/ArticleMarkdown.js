@@ -63,3 +63,32 @@ export function parserMarkdown(contenuBrut) {
     motsCles: entetes.motsCles || '',
   };
 }
+
+// Point d'entrée unique du bouton d'import de veille.html, quel que soit le fichier déposé — un
+// .md (front-matter, voir parserMarkdown ci-dessus) ou un .json au même format que l'API externe
+// (POST .../articles/externe) et que ce que produit scripts/veille-externe/envoyer_article.py :
+// { titre, categorie, contenu, contenuAudio, motsCles }. Les trois points d'entrée (bouton import,
+// script Python, API externe) convergent ainsi sur la même validation (validerChampsArticle) et la
+// même création (ArticleRepository.creer) — seule la façon de lire l'entrée diffère : ici on
+// détecte le JSON par le premier caractère non-blanc plutôt que par l'extension du fichier (le
+// contenu du fichier, tel que lu par le navigateur, est tout ce dont on dispose côté route).
+export function parserFichierImport(contenuBrut) {
+  const texte = (contenuBrut || '').trim();
+  if (texte.startsWith('{')) {
+    try {
+      const objet = JSON.parse(texte);
+      return {
+        titre: objet.titre || null,
+        categorie: objet.categorie || null,
+        contenu: objet.contenu || null,
+        contenuAudio: objet.contenuAudio || null,
+        motsCles: objet.motsCles || '',
+      };
+    } catch {
+      // Accolade de départ mais JSON invalide : on retente en Markdown plutôt que d'échouer tout
+      // de suite — un corps de texte brut peut légitimement commencer par "{" (ex. une note entre
+      // accolades) sans être du JSON.
+    }
+  }
+  return parserMarkdown(texte);
+}

@@ -37,7 +37,10 @@ export const ArticleService = {
     return ApiClient.post(`${base(foyerId)}/generer`, { categorie, sujet });
   },
 
-  async importerArticleMd(foyerId, contenuMarkdown) {
-    return ApiClient.post(`${base(foyerId)}/importer-md`, { contenu: contenuMarkdown });
+  // Le fichier peut être un .md (front-matter) ou un .json (même forme que l'API externe) — la
+  // détection se fait côté backend (domain/ArticleMarkdown.parserFichierImport), pas ici : ce
+  // service se contente de transmettre le texte brut du fichier tel quel.
+  async importerArticleFichier(foyerId, contenuFichier) {
+    return ApiClient.post(`${base(foyerId)}/importer-md`, { contenu: contenuFichier });
   },
 };

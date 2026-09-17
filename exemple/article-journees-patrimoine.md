@@ -1,0 +1,26 @@
+---
+titre: À venir ce week-end : les Journées Européennes du Patrimoine
+categorie: sortir_marseille
+motsCles: patrimoine, mucem, mac marseille, exposition
+---
+## Quoi voir ?
+
+Les Journées Européennes du Patrimoine ont lieu le samedi 19 et le dimanche 20 septembre 2026.
+C'est l'occasion idéale de pousser gratuitement les portes des musées et centres d'art de la
+ville, comme le Mac Marseille ou le Mucem, pour des visites commentées, des performances et des
+accès privilégiés aux collections d'art contemporain.
+<!-- Note d'exemple : pas de lien direct vers ces deux institutions ici, faute d'URL vérifiée —
+     voir "Infos pratiques" pour le seul lien de cet exemple, fourni par l'utilisateur. -->
+
+## Infos pratiques
+
+Entrée gratuite dans la plupart des lieux participants, sur les deux jours. Pour le programme
+complet et les horaires par lieu, voir le site dédié :
+[Programme des Journées du Patrimoine à Marseille](https://www.sortiramarseille.fr/agenda/journees-europeennes-du-patrimoine/).
+
+--- AUDIO ---
+Ce week-end, samedi 19 et dimanche 20 septembre, c'est les Journées Européennes du Patrimoine.
+C'est l'occasion idéale de visiter gratuitement les musées et centres d'art de la ville, comme le
+Mac Marseille ou le Mucem, avec des visites commentées, des performances, et un accès privilégié
+aux collections d'art contemporain. L'entrée est gratuite dans la plupart des lieux participants,
+sur les deux jours. Pour le programme complet, direction le site sortiramarseille point fr.

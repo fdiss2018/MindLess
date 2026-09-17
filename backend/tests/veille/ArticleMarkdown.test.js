@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parserMarkdown } from '../../src/veille/domain/ArticleMarkdown.js';
+import { parserMarkdown, parserFichierImport } from '../../src/veille/domain/ArticleMarkdown.js';
 
 describe('parserMarkdown', () => {
   it('extrait titre, catégorie et contenu depuis un front-matter valide', () => {
@@ -56,5 +56,45 @@ describe('parserMarkdown', () => {
     const resultat = parserMarkdown(brut);
     expect(resultat.contenu).toBe('Lecture.');
     expect(resultat.contenuAudio).toBe('Ecoute.');
+  });
+});
+
+describe('parserFichierImport', () => {
+  it('délègue à parserMarkdown pour un fichier .md (front-matter)', () => {
+    const brut = '---\ntitre: Mon article\ncategorie: ia\n---\nContenu.';
+    expect(parserFichierImport(brut)).toEqual({
+      titre: 'Mon article', categorie: 'ia', contenu: 'Contenu.', contenuAudio: null, motsCles: '',
+    });
+  });
+
+  it('lit directement un objet JSON au format de l\'API externe', () => {
+    const brut = JSON.stringify({
+      titre: 'Mon article',
+      categorie: 'ia',
+      contenu: 'Contenu à lire.',
+      contenuAudio: 'Contenu à écouter.',
+      motsCles: ['mcp', 'claude'],
+    });
+    expect(parserFichierImport(brut)).toEqual({
+      titre: 'Mon article',
+      categorie: 'ia',
+      contenu: 'Contenu à lire.',
+      contenuAudio: 'Contenu à écouter.',
+      motsCles: ['mcp', 'claude'],
+    });
+  });
+
+  it('retombe sur le parsing Markdown si le JSON est invalide malgré une accolade de départ', () => {
+    const brut = '{ pas du json valide';
+    const resultat = parserFichierImport(brut);
+    expect(resultat.titre).toBeNull();
+    expect(resultat.contenu).toBe(brut);
+  });
+
+  it('accepte un objet JSON sans contenuAudio ni motsCles (tous deux optionnels)', () => {
+    const brut = JSON.stringify({ titre: 'Mon article', categorie: 'ia', contenu: 'Contenu.' });
+    const resultat = parserFichierImport(brut);
+    expect(resultat.contenuAudio).toBeNull();
+    expect(resultat.motsCles).toBe('');
   });
 });

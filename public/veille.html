@@ -72,8 +72,8 @@
     </div>
 
     <div class="carte">
-      <button id="btn-importer" class="btn-secondaire">📥 Importer un article (.md)</button>
-      <input type="file" id="input-import" accept=".md,text/markdown" class="hidden">
+      <button id="btn-importer" class="btn-secondaire">📥 Importer un article (.md ou .json)</button>
+      <input type="file" id="input-import" accept=".md,.json,text/markdown,application/json" class="hidden">
       <p id="msg-import" class="msg hidden"></p>
     </div>
 
@@ -232,8 +232,8 @@
       if (!fichier) return;
 
       try {
-        const contenuMarkdown = await fichier.text();
-        const resultat = await ArticleService.importerArticleMd(foyerIdCourant, contenuMarkdown);
+        const contenuFichier = await fichier.text();
+        const resultat = await ArticleService.importerArticleFichier(foyerIdCourant, contenuFichier);
         afficherMsg(msgImport, `Article "${resultat.titre}" importé.`);
         await chargerEtAfficher();
       } catch (err) {

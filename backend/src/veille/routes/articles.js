@@ -3,7 +3,7 @@ import { ArticleRepository } from '../repositories/ArticleRepository.js';
 import { GeminiClient } from '../repositories/GeminiClient.js';
 import { LigneEditorialeRepository } from '../repositories/LigneEditorialeRepository.js';
 import { validerChampsArticle, extraireResume, normaliserMotsCles } from '../domain/Article.js';
-import { parserMarkdown } from '../domain/ArticleMarkdown.js';
+import { parserFichierImport } from '../domain/ArticleMarkdown.js';
 import { categorieValide, LIGNES_EDITORIALES_PAR_DEFAUT } from '../domain/Categories.js';
 import { requireUid } from '../../commun/middleware/requireUid.js';
 import { requireMembreFoyer } from '../../commun/middleware/requireMembreFoyer.js';
@@ -97,18 +97,19 @@ articlesRouter.post('/generer', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Import depuis un fichier .md avec front-matter (voir domain/ArticleMarkdown.js) — un seul
-// article par import, contrairement à l'import en lot des recettes. Même règle de validité que
-// les autres points d'entrée (validerChampsArticle), avec un message d'erreur contextualisé au
-// format .md plutôt que le message générique.
+// Import depuis un fichier déposé sur veille.html — .md (front-matter) ou .json (même forme que
+// l'API externe ci-dessous et que scripts/veille-externe/envoyer_article.py), détecté par
+// domain/ArticleMarkdown.parserFichierImport. Un seul article par import, contrairement à
+// l'import en lot des recettes. Même règle de validité que les autres points d'entrée
+// (validerChampsArticle), avec un message d'erreur générique aux deux formats.
 articlesRouter.post('/importer-md', async (req, res, next) => {
   try {
     const {
       titre, categorie, contenu, contenuAudio, motsCles,
-    } = parserMarkdown(req.body.contenu);
+    } = parserFichierImport(req.body.contenu);
     if (validerChampsArticle({ titre, categorie, contenu })) {
       return res.status(400).json({
-        erreur: "Fichier .md invalide : le front-matter doit renseigner 'titre' et 'categorie' (valeur valide), suivi du contenu de l'article.",
+        erreur: "Fichier invalide : 'titre' et 'categorie' (valeur valide) doivent être renseignés, suivis du contenu de l'article (front-matter .md ou champs JSON).",
       });
     }
 

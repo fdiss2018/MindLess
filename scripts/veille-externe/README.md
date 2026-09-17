@@ -40,6 +40,13 @@ l'API externe déjà en place (`POST /api/foyers/:foyerId/articles/externe`).
 
 L'article apparaît dans MindLess avec `source: 'api'` (badge "Ajouté via API").
 
+**Alternative sans le script** : le JSON produit par le Gem peut aussi être collé directement dans
+un fichier et déposé via le bouton "📥 Importer un article (.md ou .json)" de `veille.html` — le
+backend détecte le format automatiquement (voir `domain/ArticleMarkdown.parserFichierImport`). Dans
+ce cas l'article est marqué `source: 'import_md'` plutôt que `'api'`, et n'importe quel membre du
+foyer peut le faire (pas besoin d'être le créateur) — pratique pour ne pas avoir à configurer
+`config.json` juste pour un import ponctuel.
+
 ## Limites assumées
 
 - Pas d'automatisation de bout en bout : le passage par le Gem reste manuel (copier/coller) — c'est

@@ -6,6 +6,10 @@
   <title>MindLess - Article</title>
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Rendu Markdown de "contenu" (titres de chapitre, liens) — jamais utilisé pour contenuAudio,
+       qui reste du texte brut simple pour la synthèse vocale (voir script plus bas). -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.13/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.15/dist/purify.min.js"></script>
 </head>
 <body>
 
@@ -19,7 +23,7 @@
 
     <div class="carte">
       <button id="btn-ecouter" class="btn-secondaire">🔊 Écouter</button>
-      <p id="contenu" class="carte-desc" style="white-space:pre-wrap; margin-top:14px"></p>
+      <div id="contenu" class="contenu-article" style="margin-top:14px"></div>
     </div>
 
     <a id="lien-modifier" href="#" class="btn-secondaire btn-large">Modifier cet article</a>
@@ -83,7 +87,16 @@
         ${article.motsCles.map((m) => `<span class="badge badge-gris">${m}</span>`).join('')}
         <br>${new Date(article.dateCreation).toLocaleDateString('fr-FR')}
       `;
-      document.getElementById('contenu').textContent = article.contenu;
+      // "contenu" est rendu comme du Markdown (titres de chapitre "##", liens "[texte](url)")
+      // puis assaini par DOMPurify avant insertion — nécessaire dès qu'on injecte du HTML issu
+      // d'un contenu externe (IA, import .md/.json, API externe). contenuAudio, jamais affiché,
+      // n'est jamais rendu de cette façon (voir btnEcouter plus haut).
+      const contenuEl = document.getElementById('contenu');
+      contenuEl.innerHTML = DOMPurify.sanitize(marked.parse(article.contenu));
+      contenuEl.querySelectorAll('a').forEach((lien) => {
+        lien.target = '_blank';
+        lien.rel = 'noopener noreferrer';
+      });
       if (LectureVocaleService.estDisponible()) btnEcouter.disabled = false;
 
       // "Voir aussi" : renvoi déterministe vers les autres articles déjà publiés dans la même

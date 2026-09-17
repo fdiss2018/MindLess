@@ -210,8 +210,14 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   catégorie seule. Les articles `source: 'ia'` sont marqués d'un badge "Généré par IA" côté front
   (`veille.html`, `article-detail.html`) plutôt que présentés comme du factuel vérifié. Ouvert à
   tout membre du foyer.
-- **Import `.md`** (`POST .../articles/importer-md`) : un fichier à la fois, avec front-matter
-  minimal parsé à la main (`domain/ArticleMarkdown.js`, pas de dépendance YAML) :
+- **Import fichier** (`POST .../articles/importer-md`) : un fichier à la fois, déposé depuis le
+  bouton "Importer" de `veille.html` — `.md` (front-matter) **ou** `.json` (même forme que l'API
+  externe ci-dessous), auto-détecté par `domain/ArticleMarkdown.parserFichierImport` (JSON si le
+  texte commence par `{`, sinon Markdown) plutôt que par l'extension du fichier. Les deux formats
+  convergent sur la même sortie `{titre, categorie, contenu, contenuAudio, motsCles}`, donc sur la
+  même validation et la même création que les 3 autres points d'entrée — voir
+  `exemple/article-journees-patrimoine.md` et `.json` pour un exemple complet identique dans les
+  deux formats. Format `.md` (pas de dépendance YAML, parsing à la main) :
   ```
   ---
   titre: Mon article
@@ -225,9 +231,9 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   bouton "Écouter" retombe sur le texte à lire, comme les articles manuels/API)...
   ```
   `motsCles` et le séparateur `--- AUDIO ---` (tirets flexibles, insensible à la casse) sont tous
-  deux optionnels. Contrairement à l'import JSON en lot des recettes, une entrée invalide fait
-  échouer tout l'import (400) plutôt que d'être silencieusement ignorée — un seul article par
-  fichier. Ouvert à tout membre du foyer. Exemple complet : `exemple/article-titres-01net.md`.
+  deux optionnels des deux côtés (front-matter ou clé JSON). Contrairement à l'import JSON en lot
+  des recettes, une entrée invalide fait échouer tout l'import (400) plutôt que d'être
+  silencieusement ignorée — un seul article par fichier. Ouvert à tout membre du foyer.
 - **API externe** (`POST .../articles/externe`) : pensée pour un script/une automatisation en
   dehors de l'app (pas l'UI) — voir README.md "API externe (veille)" pour l'authentification
   (`STATIC_API_TOKEN` + `X-Test-Uid`) et un exemple `curl`. **Seul point d'entrée réservé au
@@ -240,6 +246,18 @@ navigateur (`speechSynthesis`, `services/LectureVocaleService.js`) — gratuite,
 aucune dépendance/coût backend, mais qualité de voix variable selon l'OS/navigateur et pas de
 fichier audio téléchargeable. Le bouton lit `article.contenuAudio` en priorité, et ne retombe sur
 `article.contenu` que pour les articles sans version audio dédiée (manuel/import `.md`/API).
+
+**Rendu de `contenu`** (`article-detail.html` uniquement) : un article peut contenir plusieurs
+paragraphes et plusieurs titres de chapitre, donc `contenu` est traité comme du **Markdown**, pas
+du texte brut — rendu via `marked` (CDN, `<script>` classique chargé avant le module qui l'utilise)
+puis assaini par `DOMPurify` (CDN) avant insertion en `innerHTML`, indispensable dès qu'on affiche
+du HTML dérivé d'un contenu externe (IA, import, API). Les liens rendus reçoivent
+`target="_blank" rel="noopener noreferrer"` en post-traitement (DOMPurify ne le fait pas
+automatiquement). **`contenuAudio` n'est en revanche jamais rendu de cette façon** — il n'est
+jamais affiché à l'écran, seulement lu par `LectureVocaleService`, et reste donc du texte brut
+simple (un titre `##` ou un lien lu à voix haute n'aurait aucun sens). L'excerpt de `veille.html`
+(liste) reste du texte tronqué brut — la syntaxe Markdown non rendue y est un compromis assumé pour
+un aperçu court, seule la page de détail rend le Markdown en entier.
 
 Pas de lecture temps réel (`onSnapshot`) sur `articles` : la bibliothèque d'un foyer reste petite,
 `veille.html` filtre par catégorie/recherche côté client comme `recettes.html` filtre par tag.
