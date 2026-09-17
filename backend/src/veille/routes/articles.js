@@ -105,16 +105,17 @@ articlesRouter.post('/generer', async (req, res, next) => {
 // l'API externe ci-dessous et que scripts/veille-externe/envoyer_article.py), détecté par
 // domain/ArticleMarkdown.parserFichierImport. Un seul article par import, contrairement à
 // l'import en lot des recettes. Même règle de validité que les autres points d'entrée
-// (validerChampsArticle), avec un message d'erreur générique aux deux formats.
+// (validerChampsArticle) — le message d'erreur précis (titre/catégorie/contenu) est renvoyé tel
+// quel plutôt qu'un message générique, pour rester diagnosticable sans avoir à inspecter le
+// fichier importé (utile notamment quand la source est un Gem/script externe mal configuré).
 articlesRouter.post('/importer-md', async (req, res, next) => {
   try {
     const {
       titre, categorie, contenu, contenuAudio, motsCles,
     } = parserFichierImport(req.body.contenu);
-    if (validerChampsArticle({ titre, categorie, contenu })) {
-      return res.status(400).json({
-        erreur: "Fichier invalide : 'titre' et 'categorie' (valeur valide) doivent être renseignés, suivis du contenu de l'article (front-matter .md ou champs JSON).",
-      });
+    const erreur = validerChampsArticle({ titre, categorie, contenu });
+    if (erreur) {
+      return res.status(400).json({ erreur: `Fichier invalide : ${erreur}` });
     }
 
     const id = await ArticleRepository.creer(req.params.foyerId, {
