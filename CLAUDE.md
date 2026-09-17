@@ -172,7 +172,8 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 
 - **Backend** : `domain/{Categories,Article,ArticleMarkdown,InterpreterArticleIA}.js`,
   `repositories/{ArticleRepository,GeminiClient,LigneEditorialeRepository}.js`, CRUD + génération
-  IA + import dans `routes/articles.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
+  IA + import dans `routes/articles.js`, API publique sans authentification dans
+  `routes/articlesPublics.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
   `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
 
@@ -210,23 +211,54 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   catégorie seule. Les articles `source: 'ia'` sont marqués d'un badge "Généré par IA" côté front
   (`veille.html`, `article-detail.html`) plutôt que présentés comme du factuel vérifié. Ouvert à
   tout membre du foyer.
-- **Import `.md`** (`POST .../articles/importer-md`) : un fichier à la fois, avec front-matter
-  minimal parsé à la main (`domain/ArticleMarkdown.js`, pas de dépendance YAML) :
+- **Import fichier** (`POST .../articles/importer-md`) : un fichier à la fois, déposé depuis le
+  bouton "Importer" de `veille.html` — `.md` (front-matter) **ou** `.json` (même forme que l'API
+  externe ci-dessous), auto-détecté par `domain/ArticleMarkdown.parserFichierImport` (JSON si le
+  texte commence par `{`, sinon Markdown) plutôt que par l'extension du fichier. Les deux formats
+  convergent sur la même sortie `{titre, categorie, contenu, contenuAudio, motsCles}`, donc sur la
+  même validation et la même création que les 3 autres points d'entrée — voir
+  `exemple/article-journees-patrimoine.md` et `.json` pour un exemple complet identique dans les
+  deux formats. Format `.md` (pas de dépendance YAML, parsing à la main) :
   ```
   ---
   titre: Mon article
   categorie: ia
+  motsCles: mcp, claude, anthropic
   ---
-  Corps de l'article...
+  Corps de l'article, à lire à l'écran...
+
+  --- AUDIO ---
+  Même contenu réécrit pour être écouté (optionnel — absent, contenuAudio reste `null` et le
+  bouton "Écouter" retombe sur le texte à lire, comme les articles manuels/API)...
   ```
-  Contrairement à l'import JSON en lot des recettes, une entrée invalide fait échouer tout
-  l'import (400) plutôt que d'être silencieusement ignorée — un seul article par fichier. Ouvert à
-  tout membre du foyer.
+  `motsCles` et le séparateur `--- AUDIO ---` (tirets flexibles, insensible à la casse) sont tous
+  deux optionnels des deux côtés (front-matter ou clé JSON). Contrairement à l'import JSON en lot
+  des recettes, une entrée invalide fait échouer tout l'import (400) plutôt que d'être
+  silencieusement ignorée — un seul article par fichier. Ouvert à tout membre du foyer.
 - **API externe** (`POST .../articles/externe`) : pensée pour un script/une automatisation en
   dehors de l'app (pas l'UI) — voir README.md "API externe (veille)" pour l'authentification
   (`STATIC_API_TOKEN` + `X-Test-Uid`) et un exemple `curl`. **Seul point d'entrée réservé au
   créateur du foyer** (`requireCreateurFoyer`, 403 sinon) — les 3 autres restent ouverts à tout
   membre. Articles marqués `source: 'api'`, badge "Ajouté via API" côté front.
+
+**Filtre catégorie/date** : `GET /api/foyers/:foyerId/articles` accepte `?categorie=&depuis=&jusqua=`
+(tous facultatifs, cumulables), via la fonction pure `domain/Article.filtrerArticles` — `depuis`/
+`jusqua` sont des dates `AAAA-MM-JJ` comparées à `dateCreation`. `ArticleRepository.lister` continue
+de tout renvoyer sans filtre Firestore (pas d'index composite à gérer) ; le filtre s'applique en
+mémoire côté route, sur une bibliothèque par foyer qui reste petite (même raisonnement que l'absence
+de lecture temps réel sur `articles`, voir plus bas).
+
+**API publique en lecture** (`GET /api/public/foyers/:foyerId/articles`, `routes/articlesPublics.js`) :
+route **volontairement sans authentification**, sous un préfixe `/api/public/` structurellement
+séparé de `/api/foyers/...` (montée sans le middleware `authentifier` dans `server.js`) plutôt qu'un
+paramètre optionnel sur la route existante — pour qu'aucune évolution future de celle-ci ne puisse
+affaiblir son contrôle d'accès par erreur. **Limite assumée, choisie en connaissance de cause** :
+quiconque connaît (ou devine) un `foyerId` peut lire tous les articles de ce foyer, ce qui déroge au
+modèle "tout est privé au foyer" appliqué partout ailleurs dans l'app — décision explicite de
+l'utilisateur après avoir été prévenu du compromis. Mêmes filtres `?categorie=&depuis=&jusqua=` que
+la route authentifiée (même fonction `filtrerArticles`) ; `creePar` est exclu de la réponse (seul
+champ à caractère personnel du modèle), les autres champs sont renvoyés tels quels. Voir README.md
+"API publique (veille)" pour un exemple `curl`.
 
 **Lecture/écoute** : pas de suivi d'un statut "lu" (non demandé) — un article se consulte à l'écran
 (`article-detail.html`) ou s'écoute via le bouton "🔊 Écouter", qui appelle l'API Web Speech du
@@ -234,6 +266,18 @@ navigateur (`speechSynthesis`, `services/LectureVocaleService.js`) — gratuite,
 aucune dépendance/coût backend, mais qualité de voix variable selon l'OS/navigateur et pas de
 fichier audio téléchargeable. Le bouton lit `article.contenuAudio` en priorité, et ne retombe sur
 `article.contenu` que pour les articles sans version audio dédiée (manuel/import `.md`/API).
+
+**Rendu de `contenu`** (`article-detail.html` uniquement) : un article peut contenir plusieurs
+paragraphes et plusieurs titres de chapitre, donc `contenu` est traité comme du **Markdown**, pas
+du texte brut — rendu via `marked` (CDN, `<script>` classique chargé avant le module qui l'utilise)
+puis assaini par `DOMPurify` (CDN) avant insertion en `innerHTML`, indispensable dès qu'on affiche
+du HTML dérivé d'un contenu externe (IA, import, API). Les liens rendus reçoivent
+`target="_blank" rel="noopener noreferrer"` en post-traitement (DOMPurify ne le fait pas
+automatiquement). **`contenuAudio` n'est en revanche jamais rendu de cette façon** — il n'est
+jamais affiché à l'écran, seulement lu par `LectureVocaleService`, et reste donc du texte brut
+simple (un titre `##` ou un lien lu à voix haute n'aurait aucun sens). L'excerpt de `veille.html`
+(liste) reste du texte tronqué brut — la syntaxe Markdown non rendue y est un compromis assumé pour
+un aperçu court, seule la page de détail rend le Markdown en entier.
 
 Pas de lecture temps réel (`onSnapshot`) sur `articles` : la bibliothèque d'un foyer reste petite,
 `veille.html` filtre par catégorie/recherche côté client comme `recettes.html` filtre par tag.

@@ -97,6 +97,22 @@ main {
   margin: 0 0 12px;
 }
 
+/* Contenu d'article rendu depuis du Markdown (article-detail.html) — contenuAudio n'est jamais
+   rendu ici, seul contenu (la version à lire) passe par marked/DOMPurify. */
+.contenu-article {
+  color: var(--texte);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+.contenu-article p { margin: 0 0 14px; }
+.contenu-article h1, .contenu-article h2, .contenu-article h3 {
+  margin: 20px 0 10px;
+  font-size: 1.1rem;
+}
+.contenu-article ul, .contenu-article ol { margin: 0 0 14px; padding-left: 22px; }
+.contenu-article > :first-child { margin-top: 0; }
+.contenu-article > :last-child { margin-bottom: 0; }
+
 /* ── Formulaires ── */
 label {
   display: block;
