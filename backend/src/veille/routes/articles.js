@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { ArticleRepository } from '../repositories/ArticleRepository.js';
 import { GeminiClient } from '../repositories/GeminiClient.js';
 import { LigneEditorialeRepository } from '../repositories/LigneEditorialeRepository.js';
-import { validerChampsArticle, extraireResume, normaliserMotsCles } from '../domain/Article.js';
+import {
+  validerChampsArticle, extraireResume, normaliserMotsCles, filtrerArticles,
+} from '../domain/Article.js';
 import { parserFichierImport } from '../domain/ArticleMarkdown.js';
 import { categorieValide, LIGNES_EDITORIALES_PAR_DEFAUT } from '../domain/Categories.js';
 import { requireUid } from '../../commun/middleware/requireUid.js';
@@ -31,7 +33,9 @@ articlesRouter.use(requireUid, requireMembreFoyer);
 
 articlesRouter.get('/', async (req, res, next) => {
   try {
-    res.json(await ArticleRepository.lister(req.params.foyerId));
+    const { categorie, depuis, jusqua } = req.query;
+    const articles = await ArticleRepository.lister(req.params.foyerId);
+    res.json(filtrerArticles(articles, { categorie, depuis, jusqua }));
   } catch (err) { next(err); }
 });
 

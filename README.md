@@ -148,6 +148,32 @@ Réponse `201 { "id": "..." }` ; `400` si `titre`/`categorie`/`contenu` invalide
 voir `backend/src/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
 `sortir_marseille`, `ecologie`, `ia`).
 
+### API publique (veille) — lire les articles d'un foyer sans authentification
+
+`GET /api/public/foyers/:foyerId/articles` est une route **volontairement publique, sans aucune
+authentification** (ni ID token Firebase, ni `STATIC_API_TOKEN`) — choix explicite assumé pour ce
+foyer, voir CLAUDE.md section "veille" ("Limite assumée"). Elle vit sous un préfixe `/api/public/`
+distinct de `/api/foyers/...` pour rester structurellement séparée des routes authentifiées.
+
+Filtres optionnels en query string, cumulables :
+
+```bash
+curl "http://localhost:3000/api/public/foyers/<FOYER_ID>/articles?categorie=ia&depuis=2026-09-01&jusqua=2026-09-30"
+```
+
+- `categorie` : une des catégories valides (voir ci-dessus), correspondance exacte.
+- `depuis` / `jusqua` : bornes de date `AAAA-MM-JJ` (incluses), comparées à la date de création de
+  l'article.
+
+Réponse `200`, tableau JSON (vide si aucun article ne correspond) ; `404` si `:foyerId` n'existe
+pas. Chaque article expose `id, titre, categorie, contenu, contenuAudio, motsCles, source,
+dateCreation` — **`creePar` est délibérément exclu** de cette réponse (seul champ à caractère
+personnel du modèle).
+
+Les mêmes filtres (`categorie`/`depuis`/`jusqua`) sont aussi disponibles sur la route authentifiée
+`GET /api/foyers/:foyerId/articles`, pour rester cohérent entre les deux (même fonction de filtre
+partagée, `domain/Article.filtrerArticles`).
+
 ### Tester le flux complet (frontend + backend + vraies données)
 
 1. Backend lancé (`npm run dev`), `.env` valide.

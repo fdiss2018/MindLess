@@ -172,7 +172,8 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 
 - **Backend** : `domain/{Categories,Article,ArticleMarkdown,InterpreterArticleIA}.js`,
   `repositories/{ArticleRepository,GeminiClient,LigneEditorialeRepository}.js`, CRUD + génération
-  IA + import dans `routes/articles.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
+  IA + import dans `routes/articles.js`, API publique sans authentification dans
+  `routes/articlesPublics.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
   `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
 
@@ -239,6 +240,25 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   (`STATIC_API_TOKEN` + `X-Test-Uid`) et un exemple `curl`. **Seul point d'entrée réservé au
   créateur du foyer** (`requireCreateurFoyer`, 403 sinon) — les 3 autres restent ouverts à tout
   membre. Articles marqués `source: 'api'`, badge "Ajouté via API" côté front.
+
+**Filtre catégorie/date** : `GET /api/foyers/:foyerId/articles` accepte `?categorie=&depuis=&jusqua=`
+(tous facultatifs, cumulables), via la fonction pure `domain/Article.filtrerArticles` — `depuis`/
+`jusqua` sont des dates `AAAA-MM-JJ` comparées à `dateCreation`. `ArticleRepository.lister` continue
+de tout renvoyer sans filtre Firestore (pas d'index composite à gérer) ; le filtre s'applique en
+mémoire côté route, sur une bibliothèque par foyer qui reste petite (même raisonnement que l'absence
+de lecture temps réel sur `articles`, voir plus bas).
+
+**API publique en lecture** (`GET /api/public/foyers/:foyerId/articles`, `routes/articlesPublics.js`) :
+route **volontairement sans authentification**, sous un préfixe `/api/public/` structurellement
+séparé de `/api/foyers/...` (montée sans le middleware `authentifier` dans `server.js`) plutôt qu'un
+paramètre optionnel sur la route existante — pour qu'aucune évolution future de celle-ci ne puisse
+affaiblir son contrôle d'accès par erreur. **Limite assumée, choisie en connaissance de cause** :
+quiconque connaît (ou devine) un `foyerId` peut lire tous les articles de ce foyer, ce qui déroge au
+modèle "tout est privé au foyer" appliqué partout ailleurs dans l'app — décision explicite de
+l'utilisateur après avoir été prévenu du compromis. Mêmes filtres `?categorie=&depuis=&jusqua=` que
+la route authentifiée (même fonction `filtrerArticles`) ; `creePar` est exclu de la réponse (seul
+champ à caractère personnel du modèle), les autres champs sont renvoyés tels quels. Voir README.md
+"API publique (veille)" pour un exemple `curl`.
 
 **Lecture/écoute** : pas de suivi d'un statut "lu" (non demandé) — un article se consulte à l'écran
 (`article-detail.html`) ou s'écoute via le bouton "🔊 Écouter", qui appelle l'API Web Speech du

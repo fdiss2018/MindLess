@@ -67,6 +67,26 @@ export function normaliserMotsCles(motsCles) {
   return [];
 }
 
+// Filtre une liste d'articles par catégorie et/ou plage de dates (toutes les options facultatives)
+// — comparaison sur la partie date (YYYY-MM-DD) de dateCreation, alignée sur le format attendu des
+// paramètres `depuis`/`jusqua` (des <input type="date">/query params, pas des horodatages
+// complets). Utilisée par la route authentifiée (GET /articles) et par l'API publique en lecture
+// seule (GET /api/public/foyers/:foyerId/articles) : même logique de filtre des deux côtés.
+export function filtrerArticles(articles, { categorie, depuis, jusqua } = {}) {
+  return articles.filter((article) => {
+    if (categorie && article.categorie !== categorie) return false;
+    if (depuis || jusqua) {
+      const dateArticle = (article.dateCreation || '').slice(0, 10);
+      // Un article sans dateCreation ne peut être positionné sur aucune plage : exclu dès qu'une
+      // borne est demandée, plutôt que de le laisser passer silencieusement des deux côtés.
+      if (!dateArticle) return false;
+      if (depuis && dateArticle < depuis) return false;
+      if (jusqua && dateArticle > jusqua) return false;
+    }
+    return true;
+  });
+}
+
 // Résumé tronqué du contenu d'un article — utilisé pour donner à l'IA le contexte des articles
 // déjà publiés sur une catégorie sans lui envoyer chaque article en entier (voir
 // InterpreterArticleIA.construireRequeteArticleIA, routes/articles.js POST /generer). Coupe sur un

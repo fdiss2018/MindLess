@@ -12,6 +12,7 @@ import { planningRouter } from './src/menus/routes/planning.js';
 import { listeCoursesRouter } from './src/menus/routes/listeCourses.js';
 import { nutritionRouter } from './src/menus/routes/nutrition.js';
 import { articlesRouter } from './src/veille/routes/articles.js';
+import { articlesPublicsRouter } from './src/veille/routes/articlesPublics.js';
 import { lignesEditorialesRouter } from './src/veille/routes/lignesEditoriales.js';
 
 const app = express();
@@ -40,6 +41,9 @@ app.use('/api/foyers/:foyerId/planning', authentifier, planningRouter);
 app.use('/api/foyers/:foyerId/liste-courses', authentifier, listeCoursesRouter);
 app.use('/api/foyers/:foyerId/nutrition', authentifier, nutritionRouter);
 app.use('/api/foyers/:foyerId/articles', authentifier, articlesRouter);
+// Volontairement sans `authentifier` : route publique par choix explicite de l'utilisateur, voir
+// articlesPublics.js et CLAUDE.md ("Limite assumée").
+app.use('/api/public/foyers/:foyerId/articles', articlesPublicsRouter);
 app.use('/api/foyers/:foyerId/lignes-editoriales', authentifier, lignesEditorialesRouter);
 
 app.use((err, req, res, next) => {
