@@ -146,7 +146,8 @@ curl -X POST http://localhost:3000/api/foyers/<FOYER_ID>/articles/externe \
 Réponse `201 { "id": "..." }` ; `400` si `titre`/`categorie`/`contenu` invalides, `403` si
 `X-Test-Uid` n'est pas le créateur du foyer, `404` si `:foyerId` n'existe pas. Catégories valides :
 voir `backend/src/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
-`sortir_marseille`, `ecologie`, `ia`).
+`sortir_marseille`, `ecologie`, `ia`, `economie_finances`, `societe`, `international`,
+`economie_entreprises`, `actualite_locale`).
 
 ### API publique (veille) — lire les articles d'un foyer sans authentification
 

@@ -177,10 +177,12 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
   `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
 
-6 catégories fixes (`domain/Categories.js`, table de référence comme
+11 catégories fixes (`domain/Categories.js`, table de référence comme
 `voiture/utils/ReglesEntretien.js`) : `politique`, `marseille`, `culture`, `sortir_marseille`,
-`ecologie`, `ia` — ces deux dernières avec un `accentTendances: true` qui infléchit le prompt IA
-vers les tendances émergentes du sujet plutôt qu'un résumé générique.
+`ecologie`, `ia`, `economie_finances`, `societe`, `international`, `economie_entreprises`,
+`actualite_locale` — celles marquées `accentTendances: true` (`ecologie`, `ia`,
+`economie_entreprises`) infléchissent le prompt IA vers les tendances émergentes du sujet plutôt
+qu'un résumé générique.
 
 Un article peut être créé de **4 façons** (`source: 'manuel'|'ia'|'import_md'|'api'`), toutes
 centralisées sur **`ArticleRepository.creer(foyerId, {titre, categorie, contenu, source,
@@ -457,6 +459,14 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
   attendant, `scripts/veille-externe/` documente une solution palliative manuelle : un Gem Gemini
   (recherche web réelle, côté produit consommateur) produit un JSON au format attendu, poussé vers
   `POST .../articles/externe` via `envoyer_article.py`.
+- Veille : la solution palliative "Gem Gemini" ci-dessus, initialement pensée pour `ia` seule, a
+  été généralisée à 6 catégories — un fichier `.prompt` par catégorie dans `exemple/`
+  (`gem_gemini_<categorie>.prompt` : `politique`, `economie_finances`, `societe`, `international`,
+  `economie_entreprises`, `actualite_locale`), chacun à coller dans un Gem Gemini dédié. Chaque
+  prompt respecte le même contrat JSON de sortie que `gem_gemini_ia.prompt` (`titre`, `categorie`,
+  `contenu`, `contenuAudio`, `motsCles`, plus des champs de structuration additionnels ignorés à
+  l'import) — seule la valeur `categorie` et le contenu thématique (domaines suivis, sources,
+  structure d'analyse) changent d'un fichier à l'autre.
 
 ---
 
