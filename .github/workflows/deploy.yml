@@ -64,11 +64,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      # FIREBASE_SERVICE_ACCOUNT_JSON et STATIC_API_TOKEN viennent de Google Secret Manager via
-      # --set-secrets : ils ne transitent jamais par un fichier en clair ni par un secret GitHub.
-      # CORS_ALLOWED_ORIGIN vient d'un secret GitHub (seule source de vérité, plus de dérive avec un
-      # backend/.env local périmé). Délimiteur ";" au lieu de "," car sa valeur contient elle-même
-      # des virgules.
+      # FIREBASE_SERVICE_ACCOUNT_JSON, STATIC_API_TOKEN et GEMINI_API_KEY viennent de Google Secret
+      # Manager via --set-secrets : ils ne transitent jamais par un fichier en clair ni par un
+      # secret GitHub. CORS_ALLOWED_ORIGIN vient d'un secret GitHub (seule source de vérité, plus
+      # de dérive avec un backend/.env local périmé). GEMINI_MODEL n'est pas sensible (nom de
+      # modèle public) : littéral en dur ici plutôt qu'un secret dédié pour une valeur qui change
+      # rarement. Délimiteur ";" au lieu de "," car CORS_ALLOWED_ORIGIN contient lui-même des
+      # virgules.
       - name: Déployer sur Cloud Run
         env:
           CORS_ALLOWED_ORIGIN: ${{ secrets.CORS_ALLOWED_ORIGIN }}
@@ -79,8 +81,8 @@ jobs:
             --project=mindless-c58d3 \
             --allow-unauthenticated \
             --max-instances=2 \
-            --set-env-vars="^;^CORS_ALLOWED_ORIGIN=$CORS_ALLOWED_ORIGIN" \
-            --set-secrets="FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,STATIC_API_TOKEN=STATIC_API_TOKEN:latest"
+            --set-env-vars="^;^CORS_ALLOWED_ORIGIN=$CORS_ALLOWED_ORIGIN;GEMINI_MODEL=gemini-flash-lite-latest" \
+            --set-secrets="FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,STATIC_API_TOKEN=STATIC_API_TOKEN:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest"
 
       - name: Vérifier que le backend répond (health-check)
         run: curl -fsS "$(gcloud run services describe mindless-backend --region=europe-west1 --project=mindless-c58d3 --format='value(status.url)')/api/whoami"

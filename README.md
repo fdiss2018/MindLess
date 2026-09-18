@@ -238,7 +238,19 @@ chaque déploiement) :
      --member="serviceAccount:428494497216-compute@developer.gserviceaccount.com" \
      --role="roles/secretmanager.secretAccessor" --project=mindless-c58d3
    ```
-5. Premier déploiement, avec le secret et les variables d'environnement de prod (`--set-secrets` et
+5. Même chose pour `STATIC_API_TOKEN` et `GEMINI_API_KEY` (clé d'aistudio.google.com/apikey) —
+   même schéma `create` + `add-iam-policy-binding` que ci-dessus, avec le nom du secret concerné à
+   la place de `FIREBASE_SERVICE_ACCOUNT_JSON` :
+   ```bash
+   echo -n "<VALEUR_DU_SECRET>" | gcloud secrets create GEMINI_API_KEY --data-file=- --project=mindless-c58d3
+   gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
+     --member="serviceAccount:428494497216-compute@developer.gserviceaccount.com" \
+     --role="roles/secretmanager.secretAccessor" --project=mindless-c58d3
+   ```
+   **À faire avant de merger un changement à `deploy.yml` qui référence un nouveau secret** — sinon
+   le déploiement échoue au merge suivant (`--set-secrets` pointant vers un secret inexistant), ce
+   qui casse le déploiement de tout le backend, pas seulement de la fonctionnalité concernée.
+6. Premier déploiement, avec le secret et les variables d'environnement de prod (`--set-secrets` et
    `--env-vars-file` — les commas dans `CORS_ALLOWED_ORIGIN` cassent `--set-env-vars`, préférer un
    fichier YAML) :
    ```bash
