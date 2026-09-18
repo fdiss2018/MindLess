@@ -10,4 +10,18 @@ export const CATEGORIES = {
   },
   ecologie: { libelle: 'Actualité écologique', accentTendances: true },
   ia: { libelle: "Actualité sur l'intelligence artificielle", accentTendances: true },
+  economie_finances: { libelle: 'Économie et finances', accentTendances: false },
+  societe: {
+    libelle: 'Société, justice et social (grèves, syndicats, réformes, éducation, santé, immigration...)',
+    accentTendances: false,
+  },
+  international: {
+    libelle: 'International (géopolitique, conflits, Union européenne, grandes puissances)',
+    accentTendances: false,
+  },
+  economie_entreprises: {
+    libelle: 'Économie et entreprises (marchés financiers, tech, transition énergétique)',
+    accentTendances: true,
+  },
+  actualite_locale: { libelle: 'Actualité locale', accentTendances: false },
 };

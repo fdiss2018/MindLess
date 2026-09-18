@@ -177,10 +177,12 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
   `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
 
-6 catégories fixes (`domain/Categories.js`, table de référence comme
+11 catégories fixes (`domain/Categories.js`, table de référence comme
 `voiture/utils/ReglesEntretien.js`) : `politique`, `marseille`, `culture`, `sortir_marseille`,
-`ecologie`, `ia` — ces deux dernières avec un `accentTendances: true` qui infléchit le prompt IA
-vers les tendances émergentes du sujet plutôt qu'un résumé générique.
+`ecologie`, `ia`, `economie_finances`, `societe`, `international`, `economie_entreprises`,
+`actualite_locale` — celles marquées `accentTendances: true` (`ecologie`, `ia`,
+`economie_entreprises`) infléchissent le prompt IA vers les tendances émergentes du sujet plutôt
+qu'un résumé générique.
 
 Un article peut être créé de **4 façons** (`source: 'manuel'|'ia'|'import_md'|'api'`), toutes
 centralisées sur **`ArticleRepository.creer(foyerId, {titre, categorie, contenu, source,
@@ -293,10 +295,22 @@ déclenche) et résout déjà les valeurs par défaut (`domain/Categories.LIGNES
 est réservé au créateur du foyer (403 sinon). Quelle que soit la ligne éditoriale (par défaut ou
 personnalisée), `InterpreterArticleIA` conserve toujours les règles de format JSON et la mise en
 garde anti-hallucination — un admin ne peut pas désactiver cet avertissement via son prompt.
-`culture` et `ia` ont chacune un persona par défaut complet ("Éclaireur Art Contemporain" /
-"Éclaireur IA", ce dernier taillé pour un profil professionnel IT déjà utilisateur quotidien de
-Claude/Gemini) ; les 4 autres catégories retombent sur le prompt générique tant qu'elles n'ont pas
-été personnalisées.
+`culture` et `ia` ont chacune un persona par défaut complet écrit spécifiquement pour la génération
+in-app ("Éclaireur Art Contemporain" / "Éclaireur IA", ce dernier taillé pour un profil
+professionnel IT déjà utilisateur quotidien de Claude/Gemini). Les 7 autres catégories dotées d'un
+prompt Gem (`ecologie`, `politique`, `economie_finances`, `societe`, `international`,
+`economie_entreprises`, `actualite_locale` — voir plus bas) reprennent **telles quelles** le
+contenu de leur fichier `exemple/gem_gemini_<categorie>.prompt` comme persona par défaut ; seules
+`marseille` et `sortir_marseille` retombent encore sur le prompt générique. **Limite assumée** :
+ces 7 prompts Gem sont écrits pour un modèle avec recherche web réelle ("tu as accès à la recherche
+Google en temps réel...") alors que la génération in-app n'en a aucune — la mise en garde
+anti-hallucination fixe d'`InterpreterArticleIA` (ci-dessus) reste toujours appliquée après ce
+persona et empêche techniquement toute affirmation d'actualité datée non vérifiable, mais le
+persona lui-même contient des instructions contradictoires avec cette réalité (il se pense capable
+de rechercher activement) et est nettement plus long/coûteux en tokens que les personas conçus
+spécifiquement pour l'in-app (`culture`/`ia`). Assumé pour l'instant : la version Gem (recherche
+réelle, hors app) reste le canal recommandé pour ces catégories ; la génération in-app avec ce
+persona reste utilisable mais moins optimisée qu'un persona dédié.
 
 **Continuité éditoriale** : chaque génération IA (`POST .../articles/generer`) relit les
 `NB_ARTICLES_CONTEXTE` (5) derniers articles déjà publiés dans la même catégorie du foyer
@@ -457,6 +471,16 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
   attendant, `scripts/veille-externe/` documente une solution palliative manuelle : un Gem Gemini
   (recherche web réelle, côté produit consommateur) produit un JSON au format attendu, poussé vers
   `POST .../articles/externe` via `envoyer_article.py`.
+- Veille : la solution palliative "Gem Gemini" ci-dessus, initialement pensée pour `ia` seule, a
+  été généralisée à 7 catégories — un fichier `.prompt` par catégorie dans `exemple/`
+  (`gem_gemini_<categorie>.prompt` : `ecologie`, `politique`, `economie_finances`, `societe`,
+  `international`, `economie_entreprises`, `actualite_locale`), chacun à coller dans un Gem Gemini
+  dédié. Chaque prompt respecte le même contrat JSON de sortie que `gem_gemini_ia.prompt` (`titre`,
+  `categorie`, `contenu`, `contenuAudio`, `motsCles`, plus des champs de structuration additionnels
+  ignorés à l'import) — seule la valeur `categorie` et le contenu thématique (domaines suivis,
+  sources, structure d'analyse) changent d'un fichier à l'autre. Le contenu de chacun de ces 7
+  fichiers sert aussi de persona par défaut pour la génération in-app de la catégorie
+  correspondante (voir "Lignes éditoriales" plus haut, avec la limite assumée que cela implique).
 
 ---
 
