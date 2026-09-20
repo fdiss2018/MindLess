@@ -24,4 +24,5 @@ export const CATEGORIES = {
     accentTendances: true,
   },
   actualite_locale: { libelle: 'Actualité locale', accentTendances: false },
+  mails: { libelle: 'Résumé de mes mails', accentTendances: false },
 };

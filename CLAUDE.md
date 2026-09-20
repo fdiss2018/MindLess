@@ -177,12 +177,14 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
   `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
 
-11 catégories fixes (`domain/Categories.js`, table de référence comme
+12 catégories fixes (`domain/Categories.js`, table de référence comme
 `voiture/utils/ReglesEntretien.js`) : `politique`, `marseille`, `culture`, `sortir_marseille`,
 `ecologie`, `ia`, `economie_finances`, `societe`, `international`, `economie_entreprises`,
-`actualite_locale` — celles marquées `accentTendances: true` (`ecologie`, `ia`,
+`actualite_locale`, `mails` — celles marquées `accentTendances: true` (`ecologie`, `ia`,
 `economie_entreprises`) infléchissent le prompt IA vers les tendances émergentes du sujet plutôt
-qu'un résumé générique.
+qu'un résumé générique. `mails` (résumé personnel de boîte mail, voir `exemple/copilot_mails.prompt`)
+n'a pas de ligne éditoriale par défaut dédiée — retombe sur le prompt générique — car elle n'est
+alimentée que par import `.md`/`.json` depuis Copilot, jamais par la génération IA in-app.
 
 Un article peut être créé de **4 façons** (`source: 'manuel'|'ia'|'import_md'|'api'`), toutes
 centralisées sur **`ArticleRepository.creer(foyerId, {titre, categorie, contenu, source,
