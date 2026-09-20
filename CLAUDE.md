@@ -198,8 +198,9 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
 - **Génération IA** (`POST .../articles/generer`) : appelle l'API Gemini via
   `repositories/GeminiClient.js`, qui reprend le pattern déjà en place dans le repo frère `homeFit`
   (`backend/src/services/GeminiClient.js`) — `fetch` natif (pas de SDK), clé en query param
-  (`GEMINI_API_KEY`), `responseSchema` structuré pour extraire `{titre, contenu, contenuAudio}`,
-  retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement générées** (voir
+  (`GEMINI_API_KEY`), JSON demandé par instruction dans le prompt (pas de `responseSchema`, voir
+  plus bas pourquoi), retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement
+  générées** (voir
   `Article.contenuAudio`) : `contenu` (à lire à l'écran, plusieurs paragraphes) et `contenuAudio`
   (même information réécrite pour l'oral — phrases courtes, sans sigle non prononçable, sans
   symbole de mise en forme) ; seuls les articles `source: 'ia'` ont un `contenuAudio` distinct, les
@@ -209,6 +210,13 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   (2026-09) avait donné un 429 systématique sur le modèle Gemini 3.x en tier gratuit (le grounding
   n'y est simplement pas disponible gratuitement), pas un bug de ce repo ; voir README.md pour le
   coût (5 000 requêtes groundées gratuites/mois puis 14$/1000) et l'alerte de budget mise en place.
+  **`responseSchema`/`responseMimeType` ont été retirés de la requête** : vérifié empiriquement
+  (curl direct sur l'API, 2026-09) que leur présence empêche systématiquement le grounding de se
+  déclencher sur `gemini-3.5-flash-lite` (0 recherche sur 7 essais avec schéma, contre un grounding
+  réussi à chaque fois sur le même prompt sans schéma) — contredit la documentation Google qui
+  présente cette combinaison comme supportée sur Gemini 3, mais confirmé non fonctionnel ici en
+  pratique. Le JSON est donc demandé par instruction dans le prompt, avec le `JSON.parse` + retry
+  `DEGENERE` déjà existant dans `GeminiClient.js` comme filet de sécurité.
   Le modèle décide lui-même, par appel, s'il déclenche réellement une recherche — ce n'est jamais
   garanti — donc le prompt garde une règle anti-hallucination conditionnelle : les formules datées
   ("cette semaine", "synthèse hebdomadaire"...) ne sont autorisées que si une recherche a
