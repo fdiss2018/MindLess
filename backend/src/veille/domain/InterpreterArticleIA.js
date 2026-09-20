@@ -1,5 +1,21 @@
 import { CATEGORIES } from './Categories.js';
 
+// Active le grounding Google Search côté Gemini sur chaque génération — nécessite que le projet
+// GCP derrière GEMINI_API_KEY ait la facturation Cloud activée, sans quoi l'appel échoue en 429
+// (voir CLAUDE.md "veille", tenté sans facturation en 2026-09 et écarté, retesté avec facturation
+// activée). Le modèle décide lui-même, par appel, s'il déclenche réellement une recherche — ce
+// n'est jamais garanti à chaque génération, d'où la formulation conditionnelle des règles
+// anti-hallucination plus bas plutôt qu'une simple suppression de ces règles.
+const OUTIL_RECHERCHE_GOOGLE = [{ google_search: {} }];
+
+// IMPORTANT — vérifié empiriquement (2026-09, gemini-3.5-flash-lite, endpoint v1beta) :
+// `responseSchema`/`responseMimeType` combinés à `tools: google_search` empêchent
+// systématiquement le grounding de se déclencher (0 succès sur 7 essais avec schéma, contre
+// grounding effectif sur le même prompt sans schéma) — malgré la documentation Google indiquant
+// que Gemini 3 supporte cette combinaison. Le JSON est donc demandé par instruction dans le prompt
+// ci-dessous plutôt que par `responseSchema` ; GeminiClient.js s'appuie sur son JSON.parse +
+// retry DEGENERE existant comme filet de sécurité pour ce mode "JSON en texte libre".
+
 // Construit le corps de requête envoyé à l'API Gemini (generateContent) — voir
 // repositories/GeminiClient.js pour l'appel réseau. Fonction pure, aucun appel réseau ici (même
 // séparation que homeFit/backend/src/domain/InterpreterExerciceIA.js).
@@ -38,7 +54,8 @@ ${articlesPrecedents.map((a) => `- [${(a.dateCreation || '').slice(0, 10)}] "${a
   const prompt = `${persona}${contexteArticlesPrecedents}
 ${sujet ? `\nSujet précis demandé par l'utilisateur : "${sujet}".` : ''}
 
-Réponds UNIQUEMENT avec un objet JSON de cette forme :
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balise de code
+(pas de \`\`\`json\`\`\`), de cette forme exacte :
 {
   "titre": "Titre accrocheur de l'article",
   "contenu": "Version à LIRE à l'écran : plusieurs paragraphes, texte brut sans markdown.",
@@ -58,33 +75,43 @@ Règles à respecter :
   que lue : phrases courtes, transitions naturelles à l'oral ("ensuite", "par ailleurs"...), aucun
   sigle ni acronyme qui se prononce mal tel quel (développe-le au moins une fois), aucun symbole de
   mise en forme. Ce n'est pas un résumé plus court : la même information, sous une autre forme.
-- Tu n'as pas accès à une source d'actualité en temps réel : ne présente jamais une information
-  comme confirmée si tu n'en es pas certain, reste sur des faits et tendances généraux plutôt que
-  d'inventer un évènement daté précis.
-- N'utilise JAMAIS les mots ou expressions "cette semaine", "cette quinzaine", "récemment",
-  "dernièrement", "synthèse hebdomadaire/de la semaine", "point hebdomadaire" ou toute autre
-  formule qui laisse croire que tu rapportes un évènement daté que tu ne peux pas connaître —
-  reformule sans référence temporelle relative (ex. "actuellement", "aujourd'hui" restent
-  acceptables, une date ou une période précise ne l'est pas).`;
+- Tu as accès à un outil de recherche Google (recherche web réelle) : utilise-le chaque fois
+  qu'une information factuelle datée (évènement récent, chiffre, annonce, sortie de produit...)
+  est pertinente pour cet article, pour la vérifier avant de l'inclure.
+- Cet outil ne se déclenche pas forcément à chaque génération : si tu ne l'as pas utilisé, ou s'il
+  n'a rien retourné de pertinent sur un point précis, ne présente jamais ce point comme confirmé —
+  reste alors sur des faits et tendances généraux plutôt que d'inventer un évènement daté précis.
+- N'utilise les expressions "cette semaine", "cette quinzaine", "récemment", "dernièrement",
+  "synthèse hebdomadaire/de la semaine", "point hebdomadaire" (ou toute formule équivalente) que si
+  une recherche a effectivement confirmé un fait précis et daté de cette période ; sinon, reformule
+  sans référence temporelle relative (ex. "actuellement", "aujourd'hui" restent acceptables, une
+  date ou une période précise inventée ne l'est pas).`;
 
   return {
     contents: [{ parts: [{ text: prompt }] }],
+    tools: OUTIL_RECHERCHE_GOOGLE,
+    // Pas de responseMimeType/responseSchema ici — voir la note ci-dessus sur leur incompatibilité
+    // empirique avec le grounding sur ce modèle. Le format JSON est entièrement porté par
+    // l'instruction du prompt.
     generationConfig: {
-      responseMimeType: 'application/json',
       maxOutputTokens: 4096,
       temperature: 0.4,
-      responseSchema: {
-        type: 'OBJECT',
-        properties: {
-          titre: { type: 'STRING' },
-          contenu: { type: 'STRING' },
-          contenuAudio: { type: 'STRING' },
-          motsCles: { type: 'ARRAY', items: { type: 'STRING' } },
-        },
-        required: ['titre', 'contenu', 'contenuAudio', 'motsCles'],
-      },
     },
   };
+}
+
+// Transforme le groundingMetadata brut renvoyé par l'API Gemini (extrait de l'enveloppe HTTP par
+// GeminiClient, au même titre que finishReason) en une liste de sources exploitables côté front —
+// dédoublonnée par uri, tolérante à l'absence de grounding (le modèle n'a pas forcément cherché
+// sur cet appel, voir OUTIL_RECHERCHE_GOOGLE ci-dessus).
+export function extraireSourcesGrounding(groundingMetadata) {
+  const chunks = groundingMetadata?.groundingChunks ?? [];
+  const parUri = new Map();
+  for (const chunk of chunks) {
+    const uri = chunk?.web?.uri;
+    if (uri && !parUri.has(uri)) parUri.set(uri, { uri, titre: chunk.web.title || uri });
+  }
+  return [...parUri.values()];
 }
 
 // Valide la réponse JSON déjà parsée par GeminiClient — un titre, un contenu ou une version audio

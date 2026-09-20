@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { construireRequeteArticleIA, validerArticleIA } from '../../src/veille/domain/InterpreterArticleIA.js';
+import {
+  construireRequeteArticleIA, validerArticleIA, extraireSourcesGrounding,
+} from '../../src/veille/domain/InterpreterArticleIA.js';
 
 describe('construireRequeteArticleIA', () => {
   it('mentionne les tendances émergentes pour une catégorie qui accentue les tendances', () => {
@@ -17,10 +19,15 @@ describe('construireRequeteArticleIA', () => {
     expect(requete.contents[0].parts[0].text).toContain('exposition Cézanne');
   });
 
-  it('demande une réponse JSON structurée avec titre, contenu, contenuAudio et motsCles', () => {
+  it('demande une réponse JSON par instruction, sans responseSchema (incompatible avec le grounding sur ce modèle)', () => {
     const requete = construireRequeteArticleIA({ categorie: 'marseille' });
-    expect(requete.generationConfig.responseSchema.required)
-      .toEqual(['titre', 'contenu', 'contenuAudio', 'motsCles']);
+    const texte = requete.contents[0].parts[0].text;
+    expect(texte).toContain('"titre"');
+    expect(texte).toContain('"contenu"');
+    expect(texte).toContain('"contenuAudio"');
+    expect(texte).toContain('"motsCles"');
+    expect(requete.generationConfig.responseSchema).toBeUndefined();
+    expect(requete.generationConfig.responseMimeType).toBeUndefined();
   });
 
   it('utilise la ligne éditoriale personnalisée à la place du prompt générique quand elle est fournie', () => {
@@ -34,7 +41,12 @@ describe('construireRequeteArticleIA', () => {
 
   it('conserve la mise en garde anti-hallucination même avec une ligne éditoriale personnalisée', () => {
     const requete = construireRequeteArticleIA({ categorie: 'culture', ligneEditoriale: 'Persona custom.' });
-    expect(requete.contents[0].parts[0].text).toContain("pas accès à une source d'actualité en temps réel");
+    expect(requete.contents[0].parts[0].text).toContain('Tu as accès à un outil de recherche Google');
+  });
+
+  it('active le grounding Google Search sur chaque requête', () => {
+    const requete = construireRequeteArticleIA({ categorie: 'politique' });
+    expect(requete.tools).toEqual([{ google_search: {} }]);
   });
 
   it('ignore une ligne éditoriale vide et retombe sur le prompt générique', () => {
@@ -63,9 +75,51 @@ describe('construireRequeteArticleIA', () => {
     expect(texte).toContain('"Claude Code évolue"');
   });
 
-  it('interdit explicitement les formules laissant croire à une actualité datée ("cette semaine"...)', () => {
+  it('autorise les formules datées uniquement si une recherche les a confirmées ("cette semaine"...)', () => {
     const requete = construireRequeteArticleIA({ categorie: 'ia' });
     expect(requete.contents[0].parts[0].text).toContain('"cette semaine"');
+  });
+});
+
+describe('extraireSourcesGrounding', () => {
+  it('retourne un tableau vide si groundingMetadata est absent (le modèle n\'a pas cherché)', () => {
+    expect(extraireSourcesGrounding(undefined)).toEqual([]);
+    expect(extraireSourcesGrounding(null)).toEqual([]);
+    expect(extraireSourcesGrounding({})).toEqual([]);
+  });
+
+  it('extrait uri et titre de chaque groundingChunk', () => {
+    const sources = extraireSourcesGrounding({
+      groundingChunks: [
+        { web: { uri: 'https://exemple.fr/a', title: 'Article A' } },
+        { web: { uri: 'https://exemple.fr/b', title: 'Article B' } },
+      ],
+    });
+    expect(sources).toEqual([
+      { uri: 'https://exemple.fr/a', titre: 'Article A' },
+      { uri: 'https://exemple.fr/b', titre: 'Article B' },
+    ]);
+  });
+
+  it('dédoublonne par uri', () => {
+    const sources = extraireSourcesGrounding({
+      groundingChunks: [
+        { web: { uri: 'https://exemple.fr/a', title: 'Article A' } },
+        { web: { uri: 'https://exemple.fr/a', title: 'Article A (autre passage)' } },
+      ],
+    });
+    expect(sources).toEqual([{ uri: 'https://exemple.fr/a', titre: 'Article A' }]);
+  });
+
+  it('retombe sur uri si le titre est absent', () => {
+    const sources = extraireSourcesGrounding({
+      groundingChunks: [{ web: { uri: 'https://exemple.fr/a' } }],
+    });
+    expect(sources).toEqual([{ uri: 'https://exemple.fr/a', titre: 'https://exemple.fr/a' }]);
+  });
+
+  it('ignore les chunks sans uri', () => {
+    expect(extraireSourcesGrounding({ groundingChunks: [{ web: {} }, {}] })).toEqual([]);
   });
 });
 

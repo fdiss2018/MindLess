@@ -24,6 +24,10 @@
     <div class="carte">
       <button id="btn-ecouter" class="btn-secondaire">🔊 Écouter</button>
       <div id="contenu" class="contenu-article" style="margin-top:14px"></div>
+      <div id="bloc-sources" class="hidden" style="margin-top:14px">
+        <p class="carte-titre" style="font-size:0.95em">🔎 Sources</p>
+        <ul id="liste-sources"></ul>
+      </div>
     </div>
 
     <a id="lien-modifier" href="#" class="btn-secondaire btn-large">Modifier cet article</a>
@@ -98,6 +102,21 @@
         lien.rel = 'noopener noreferrer';
       });
       if (LectureVocaleService.estDisponible()) btnEcouter.disabled = false;
+
+      // Sources du grounding Google Search (voir InterpreterArticleIA.extraireSourcesGrounding)
+      // — uniquement pour les articles générés par IA, et seulement quand le modèle a
+      // effectivement déclenché une recherche sur cette génération (sources peut être vide sinon).
+      if (article.source === 'ia' && article.sources?.length > 0) {
+        const listeSourcesEl = document.getElementById('liste-sources');
+        listeSourcesEl.innerHTML = DOMPurify.sanitize(article.sources.map((s) => `
+          <li><a href="${s.uri}">${s.titre}</a></li>
+        `).join(''));
+        listeSourcesEl.querySelectorAll('a').forEach((lien) => {
+          lien.target = '_blank';
+          lien.rel = 'noopener noreferrer';
+        });
+        document.getElementById('bloc-sources').classList.remove('hidden');
+      }
 
       // "Voir aussi" : renvoi déterministe vers les autres articles déjà publiés dans la même
       // catégorie (pas de lien choisi par l'IA, qui ne peut que citer un titre en prose dans le

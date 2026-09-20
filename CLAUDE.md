@@ -200,21 +200,39 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
 - **Génération IA** (`POST .../articles/generer`) : appelle l'API Gemini via
   `repositories/GeminiClient.js`, qui reprend le pattern déjà en place dans le repo frère `homeFit`
   (`backend/src/services/GeminiClient.js`) — `fetch` natif (pas de SDK), clé en query param
-  (`GEMINI_API_KEY`), `responseSchema` structuré pour extraire `{titre, contenu, contenuAudio}`,
-  retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement générées** (voir
+  (`GEMINI_API_KEY`), JSON demandé par instruction dans le prompt (pas de `responseSchema`, voir
+  plus bas pourquoi), retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement
+  générées** (voir
   `Article.contenuAudio`) : `contenu` (à lire à l'écran, plusieurs paragraphes) et `contenuAudio`
   (même information réécrite pour l'oral — phrases courtes, sans sigle non prononçable, sans
   symbole de mise en forme) ; seuls les articles `source: 'ia'` ont un `contenuAudio` distinct, les
-  3 autres points d'entrée n'ont qu'un seul texte. **Limite assumée et déjà éprouvée** : un LLM
-  sans recherche web ne peut pas rapporter de vraies actualités datées — le grounding Google Search
-  (`tools: google_search`) a été testé et écarté (429 systématique sur le modèle courant en tier
-  gratuit, limite actuellement documentée côté Google, pas un bug de ce repo). Le prompt interdit
-  donc explicitement toute formule laissant croire à une actualité datée ("cette semaine",
-  "synthèse hebdomadaire"...) et assume produire des repères de fond plutôt que des dépêches ;
-  fournir un `sujet` précis améliore nettement la spécificité du résultat par rapport à une
-  catégorie seule. Les articles `source: 'ia'` sont marqués d'un badge "Généré par IA" côté front
-  (`veille.html`, `article-detail.html`) plutôt que présentés comme du factuel vérifié. Ouvert à
-  tout membre du foyer.
+  3 autres points d'entrée n'ont qu'un seul texte. **Grounding Google Search actif** (`tools:
+  google_search`, `InterpreterArticleIA.js`) sur chaque génération, depuis que le projet GCP
+  derrière `GEMINI_API_KEY` a la facturation Cloud activée — un premier essai sans facturation
+  (2026-09) avait donné un 429 systématique sur le modèle Gemini 3.x en tier gratuit (le grounding
+  n'y est simplement pas disponible gratuitement), pas un bug de ce repo ; voir README.md pour le
+  coût (5 000 requêtes groundées gratuites/mois puis 14$/1000) et l'alerte de budget mise en place.
+  **`responseSchema`/`responseMimeType` ont été retirés de la requête** : vérifié empiriquement
+  (curl direct sur l'API, 2026-09) que leur présence empêche systématiquement le grounding de se
+  déclencher sur `gemini-3.5-flash-lite` (0 recherche sur 7 essais avec schéma, contre un grounding
+  réussi à chaque fois sur le même prompt sans schéma) — contredit la documentation Google qui
+  présente cette combinaison comme supportée sur Gemini 3, mais confirmé non fonctionnel ici en
+  pratique. Le JSON est donc demandé par instruction dans le prompt, avec le `JSON.parse` + retry
+  `DEGENERE` déjà existant dans `GeminiClient.js` comme filet de sécurité.
+  Le modèle décide lui-même, par appel, s'il déclenche réellement une recherche — ce n'est jamais
+  garanti — donc le prompt garde une règle anti-hallucination conditionnelle : les formules datées
+  ("cette semaine", "synthèse hebdomadaire"...) ne sont autorisées que si une recherche a
+  effectivement confirmé le fait, sinon l'IA reste sur des repères de fond plutôt que des dépêches
+  inventées. Les sources renvoyées par le grounding (`groundingMetadata`, extraites par
+  `InterpreterArticleIA.extraireSourcesGrounding`) sont stockées dans `Article.sources` et affichées
+  dans un bloc "Sources" sur `article-detail.html` quand le modèle a effectivement cherché ;
+  `sources` n'est jamais modifiable via `PUT` (`CHAMPS_MODIFIABLES`, `routes/articles.js`), pour
+  éviter qu'un membre fabrique de fausses citations sur un article manuel/importé. Fournir un
+  `sujet` précis améliore nettement la spécificité du résultat par rapport à une catégorie seule.
+  Les articles `source: 'ia'` sont marqués d'un badge "Généré par IA" côté front (`veille.html`,
+  `article-detail.html`) plutôt que présentés comme du factuel vérifié — le grounding réduit le
+  risque d'hallucination sans l'éliminer (recherche non garantie à chaque appel). Ouvert à tout
+  membre du foyer.
 - **Import fichier** (`POST .../articles/importer-md`) : un fichier à la fois, déposé depuis le
   bouton "Importer" de `veille.html` — `.md` (front-matter) **ou** `.json` (même forme que l'API
   externe ci-dessous), auto-détecté par `domain/ArticleMarkdown.parserFichierImport` (JSON si le
@@ -303,16 +321,16 @@ professionnel IT déjà utilisateur quotidien de Claude/Gemini). Les 7 autres ca
 prompt Gem (`ecologie`, `politique`, `economie_finances`, `societe`, `international`,
 `economie_entreprises`, `actualite_locale` — voir plus bas) reprennent **telles quelles** le
 contenu de leur fichier `exemple/gem_gemini_<categorie>.prompt` comme persona par défaut ; seules
-`marseille` et `sortir_marseille` retombent encore sur le prompt générique. **Limite assumée** :
-ces 7 prompts Gem sont écrits pour un modèle avec recherche web réelle ("tu as accès à la recherche
-Google en temps réel...") alors que la génération in-app n'en a aucune — la mise en garde
-anti-hallucination fixe d'`InterpreterArticleIA` (ci-dessus) reste toujours appliquée après ce
-persona et empêche techniquement toute affirmation d'actualité datée non vérifiable, mais le
-persona lui-même contient des instructions contradictoires avec cette réalité (il se pense capable
-de rechercher activement) et est nettement plus long/coûteux en tokens que les personas conçus
-spécifiquement pour l'in-app (`culture`/`ia`). Assumé pour l'instant : la version Gem (recherche
-réelle, hors app) reste le canal recommandé pour ces catégories ; la génération in-app avec ce
-persona reste utilisable mais moins optimisée qu'un persona dédié.
+`marseille` et `sortir_marseille` retombent encore sur le prompt générique. Ces 7 prompts Gem sont
+écrits pour un modèle avec recherche web réelle ("tu as accès à la recherche Google en temps
+réel...") — cohérent avec la génération in-app depuis l'activation du grounding ci-dessus (c'était
+une incohérence documentée avant cette activation : le persona supposait une recherche que l'in-app
+n'avait pas). Restent nettement plus longs/coûteux en tokens que les personas conçus spécifiquement
+pour l'in-app (`culture`/`ia`), sans bénéfice de contenu proportionnel pour l'usage in-app (leurs
+sections de structuration détaillée — statuts, chiffres clés... — ne sont pas exploitées par
+`validerArticleIA`, qui n'extrait que titre/contenu/contenuAudio/motsCles) ; la version Gem
+(recherche réelle, hors app) reste le canal recommandé pour ces catégories si le coût en tokens de
+la génération in-app devient sensible.
 
 **Continuité éditoriale** : chaque génération IA (`POST .../articles/generer`) relit les
 `NB_ARTICLES_CONTEXTE` (5) derniers articles déjà publiés dans la même catégorie du foyer
@@ -356,8 +374,10 @@ foyers/{foyerId}/listeCourses/{itemId}              # collection plate = éditio
   { nom, quantite, unite, categorie, coche, origine: 'manuel'|'recette'|'mixte', recetteIds: [] }
 
 foyers/{foyerId}/articles/{articleId}
-  { titre, categorie, contenu, contenuAudio: string|null, source: 'manuel'|'ia'|'import_md'|'api',
-    creePar, dateCreation }                             # contenuAudio non null seulement si source: 'ia'
+  { titre, categorie, contenu, contenuAudio: string|null, motsCles: string[],
+    sources: {uri, titre}[], source: 'manuel'|'ia'|'import_md'|'api', creePar, dateCreation }
+    # contenuAudio non null seulement si source: 'ia' ; sources non vide seulement si source: 'ia'
+    # ET que le grounding Google Search a effectivement cherché sur cette génération
 
 foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une collection
   { [categorie]: texte, ..., dateMaj }              # clé absente = valeur par défaut (voir Categories.js)
@@ -462,17 +482,21 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
 - Conversion d'unités dans le générateur de liste de courses (ex. g ↔ kg)
 - Intervalles d'entretien personnalisables par véhicule
 - Étendre `ResoudreProfil`/`ObjectifsNutritionnels` à d'autres tranches d'âge (enfant, senior)
-- Veille : pas de limite de coût/fréquence sur `POST .../articles/generer` (appel Gemini payant
-  au-delà du quota gratuit) — à ajouter si l'usage le justifie
-- Veille : aucune source d'actualité réelle (recherche web/agrégateur de news) — la génération IA
-  reste un modèle de langage sans accès temps réel, voir la limite documentée plus haut. Le
-  grounding Gemini (`tools: google_search`) a été essayé (2026-09) et écarté : 429 systématique en
-  tier gratuit sur `gemini-flash-lite-latest` (résolu en `gemini-3.5-flash-lite`), problème
-  documenté côté Google (forums développeurs), pas un souci de configuration ici — à retester si
-  Google stabilise ça, ou si la facturation est activée (sans garantie que ça suffise). En
-  attendant, `scripts/veille-externe/` documente une solution palliative manuelle : un Gem Gemini
-  (recherche web réelle, côté produit consommateur) produit un JSON au format attendu, poussé vers
-  `POST .../articles/externe` via `envoyer_article.py`.
+- Veille : pas de limite de coût/fréquence côté appli sur `POST .../articles/generer` — le
+  grounding Google Search (voir ci-dessous) a un vrai coût marginal au-delà du quota gratuit
+  mensuel, mitigé pour l'instant par une alerte de budget GCP (aucun code, voir README.md) plutôt
+  qu'un compteur applicatif ; à revoir si l'usage dépasse largement le quota gratuit.
+- ✅ Veille : grounding Google Search (`tools: google_search`) activé sur la génération in-app
+  (2026-09). Un premier essai sans facturation Cloud activée avait donné un 429 systématique — pas
+  un bug de ce repo, juste une limite du tier gratuit sur les modèles Gemini 3.x, où le grounding
+  n'est simplement pas disponible sans facturation. Une fois la facturation activée sur le projet
+  GCP derrière `GEMINI_API_KEY` (5 000 requêtes groundées gratuites/mois, puis 14$/1000 — voir
+  README.md), le grounding fonctionne : le modèle décide par appel s'il déclenche une recherche, et
+  les sources trouvées (`groundingMetadata`) sont désormais captées et affichées (`Article.sources`,
+  bloc "Sources" sur `article-detail.html`). `scripts/veille-externe/` (Gem Gemini côté produit
+  consommateur, recherche réelle garantie) reste une alternative valable pour les catégories aux
+  personas les plus lourds, mais n'est plus strictement nécessaire pour avoir une génération in-app
+  qui s'appuie sur une vraie recherche web.
 - Veille : la solution palliative "Gem Gemini" ci-dessus, initialement pensée pour `ia` seule, a
   été généralisée à 7 catégories — un fichier `.prompt` par catégorie dans `exemple/`
   (`gem_gemini_<categorie>.prompt` : `ecologie`, `politique`, `economie_finances`, `societe`,
@@ -482,7 +506,8 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
   ignorés à l'import) — seule la valeur `categorie` et le contenu thématique (domaines suivis,
   sources, structure d'analyse) changent d'un fichier à l'autre. Le contenu de chacun de ces 7
   fichiers sert aussi de persona par défaut pour la génération in-app de la catégorie
-  correspondante (voir "Lignes éditoriales" plus haut, avec la limite assumée que cela implique).
+  correspondante (voir "Lignes éditoriales" plus haut — leur hypothèse de recherche web réelle est
+  désormais cohérente avec l'in-app aussi, depuis l'activation du grounding ci-dessus).
 
 ---
 

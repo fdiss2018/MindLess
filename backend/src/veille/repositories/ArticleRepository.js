@@ -9,7 +9,7 @@ export const ArticleRepository = {
   // varie selon l'appelant. La validation des champs (validerChampsArticle) reste à la charge de
   // la route appelante, qui peut vouloir un message d'erreur contextualisé (ex. import .md).
   async creer(foyerId, {
-    titre, categorie, contenu, contenuAudio = null, motsCles = [], source, creePar,
+    titre, categorie, contenu, contenuAudio = null, motsCles = [], sources = [], source, creePar,
   }) {
     const article = new Article({
       titre,
@@ -17,6 +17,7 @@ export const ArticleRepository = {
       contenu,
       contenuAudio,
       motsCles,
+      sources,
       source,
       creePar,
       dateCreation: new Date().toISOString(),
