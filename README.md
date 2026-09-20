@@ -66,6 +66,14 @@ gcloud secrets versions access latest --secret=STATIC_API_TOKEN --project=mindle
    - `GEMINI_API_KEY` / `GEMINI_MODEL` — clé API Gemini (aistudio.google.com/apikey), utilisée par
      le module veille pour générer des articles (voir CLAUDE.md). Optionnel si tu ne testes pas
      `POST .../articles/generer` : la route répond alors 500 plutôt que de planter le serveur.
+     **Grounding Google Search** : la génération in-app s'appuie sur une vraie recherche web
+     (`tools: google_search`) à chaque appel — ça nécessite que le **projet GCP associé à la clé**
+     ait la facturation Cloud activée (vérifie le projet sur aistudio.google.com/apikey, ce n'est
+     pas forcément `mindless-c58d3`), sans quoi l'appel échoue en 429 (le grounding n'est pas
+     disponible gratuitement sur les modèles Gemini 3.x). Une fois la facturation activée : 5 000
+     requêtes groundées gratuites par mois, puis 14$ par 1000 au-delà — recommandé de créer une
+     alerte de budget (`console.cloud.google.com/billing` → Budgets et alertes) comme filet de
+     sécurité, plutôt qu'une limite côté appli.
    - `CORS_ALLOWED_ORIGIN` — origines autorisées, séparées par des virgules (ex.
      `http://localhost:5000` pour l'émulateur Hosting).
 6. `cd backend && npm install`, puis `npm install` à la racine.

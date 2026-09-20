@@ -54,12 +54,13 @@ articlesRouter.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Génération IA (Gemini, voir repositories/GeminiClient.js). Le contenu généré n'est jamais
-// garanti factuellement exact (pas d'accès à une source d'actualité en temps réel) : source: 'ia'
-// permet au front d'afficher un badge d'avertissement plutôt que de laisser croire à du factuel
-// vérifié. Pas de validerChampsArticle ici : titre/contenu viennent de
-// InterpreterArticleIA.validerArticleIA (déjà garantis non vides) — seule la catégorie doit être
-// vérifiée avant d'appeler Gemini, pour échouer vite plutôt que de payer un appel pour rien.
+// Génération IA (Gemini, voir repositories/GeminiClient.js), avec grounding Google Search actif à
+// chaque appel — le contenu n'est donc pas garanti factuellement exact pour autant (le modèle ne
+// déclenche pas toujours une recherche, voir InterpreterArticleIA.js) : source: 'ia' permet au
+// front d'afficher un badge d'avertissement plutôt que de laisser croire à du factuel vérifié.
+// Pas de validerChampsArticle ici : titre/contenu viennent de InterpreterArticleIA.validerArticleIA
+// (déjà garantis non vides) — seule la catégorie doit être vérifiée avant d'appeler Gemini, pour
+// échouer vite plutôt que de payer un appel pour rien.
 articlesRouter.post('/generer', async (req, res, next) => {
   try {
     const { categorie, sujet } = req.body;
@@ -88,15 +89,15 @@ articlesRouter.post('/generer', async (req, res, next) => {
       .map((a) => ({ titre: a.titre, dateCreation: a.dateCreation, extrait: extraireResume(a.contenu) }));
 
     const {
-      titre, contenu, contenuAudio, motsCles,
+      titre, contenu, contenuAudio, motsCles, sources,
     } = await GeminiClient.genererArticleParIA({
       categorie, sujet, ligneEditoriale, articlesPrecedents,
     });
     const id = await ArticleRepository.creer(req.params.foyerId, {
-      titre, categorie, contenu, contenuAudio, motsCles, source: 'ia', creePar: req.uid,
+      titre, categorie, contenu, contenuAudio, motsCles, sources, source: 'ia', creePar: req.uid,
     });
     res.status(201).json({
-      id, titre, contenu, contenuAudio, motsCles,
+      id, titre, contenu, contenuAudio, motsCles, sources,
     });
   } catch (err) { next(err); }
 });

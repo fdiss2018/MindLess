@@ -1,5 +1,13 @@
 import { CATEGORIES } from './Categories.js';
 
+// Active le grounding Google Search côté Gemini sur chaque génération — nécessite que le projet
+// GCP derrière GEMINI_API_KEY ait la facturation Cloud activée, sans quoi l'appel échoue en 429
+// (voir CLAUDE.md "veille", tenté sans facturation en 2026-09 et écarté, retesté avec facturation
+// activée). Le modèle décide lui-même, par appel, s'il déclenche réellement une recherche — ce
+// n'est jamais garanti à chaque génération, d'où la formulation conditionnelle des règles
+// anti-hallucination plus bas plutôt qu'une simple suppression de ces règles.
+const OUTIL_RECHERCHE_GOOGLE = [{ google_search: {} }];
+
 // Construit le corps de requête envoyé à l'API Gemini (generateContent) — voir
 // repositories/GeminiClient.js pour l'appel réseau. Fonction pure, aucun appel réseau ici (même
 // séparation que homeFit/backend/src/domain/InterpreterExerciceIA.js).
@@ -58,17 +66,21 @@ Règles à respecter :
   que lue : phrases courtes, transitions naturelles à l'oral ("ensuite", "par ailleurs"...), aucun
   sigle ni acronyme qui se prononce mal tel quel (développe-le au moins une fois), aucun symbole de
   mise en forme. Ce n'est pas un résumé plus court : la même information, sous une autre forme.
-- Tu n'as pas accès à une source d'actualité en temps réel : ne présente jamais une information
-  comme confirmée si tu n'en es pas certain, reste sur des faits et tendances généraux plutôt que
-  d'inventer un évènement daté précis.
-- N'utilise JAMAIS les mots ou expressions "cette semaine", "cette quinzaine", "récemment",
-  "dernièrement", "synthèse hebdomadaire/de la semaine", "point hebdomadaire" ou toute autre
-  formule qui laisse croire que tu rapportes un évènement daté que tu ne peux pas connaître —
-  reformule sans référence temporelle relative (ex. "actuellement", "aujourd'hui" restent
-  acceptables, une date ou une période précise ne l'est pas).`;
+- Tu as accès à un outil de recherche Google (recherche web réelle) : utilise-le chaque fois
+  qu'une information factuelle datée (évènement récent, chiffre, annonce, sortie de produit...)
+  est pertinente pour cet article, pour la vérifier avant de l'inclure.
+- Cet outil ne se déclenche pas forcément à chaque génération : si tu ne l'as pas utilisé, ou s'il
+  n'a rien retourné de pertinent sur un point précis, ne présente jamais ce point comme confirmé —
+  reste alors sur des faits et tendances généraux plutôt que d'inventer un évènement daté précis.
+- N'utilise les expressions "cette semaine", "cette quinzaine", "récemment", "dernièrement",
+  "synthèse hebdomadaire/de la semaine", "point hebdomadaire" (ou toute formule équivalente) que si
+  une recherche a effectivement confirmé un fait précis et daté de cette période ; sinon, reformule
+  sans référence temporelle relative (ex. "actuellement", "aujourd'hui" restent acceptables, une
+  date ou une période précise inventée ne l'est pas).`;
 
   return {
     contents: [{ parts: [{ text: prompt }] }],
+    tools: OUTIL_RECHERCHE_GOOGLE,
     generationConfig: {
       responseMimeType: 'application/json',
       maxOutputTokens: 4096,
@@ -85,6 +97,20 @@ Règles à respecter :
       },
     },
   };
+}
+
+// Transforme le groundingMetadata brut renvoyé par l'API Gemini (extrait de l'enveloppe HTTP par
+// GeminiClient, au même titre que finishReason) en une liste de sources exploitables côté front —
+// dédoublonnée par uri, tolérante à l'absence de grounding (le modèle n'a pas forcément cherché
+// sur cet appel, voir OUTIL_RECHERCHE_GOOGLE ci-dessus).
+export function extraireSourcesGrounding(groundingMetadata) {
+  const chunks = groundingMetadata?.groundingChunks ?? [];
+  const parUri = new Map();
+  for (const chunk of chunks) {
+    const uri = chunk?.web?.uri;
+    if (uri && !parUri.has(uri)) parUri.set(uri, { uri, titre: chunk.web.title || uri });
+  }
+  return [...parUri.values()];
 }
 
 // Valide la réponse JSON déjà parsée par GeminiClient — un titre, un contenu ou une version audio

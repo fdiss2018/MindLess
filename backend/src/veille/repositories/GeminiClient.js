@@ -3,10 +3,13 @@
 // ce fichier ne fait que l'appel HTTP et la gestion d'erreur. Reprend le pattern déjà en place
 // dans homeFit/backend/src/services/GeminiClient.js (même API Gemini, même stratégie de retry).
 // La clé n'existe que côté serveur (process.env.GEMINI_API_KEY) — jamais envoyée au navigateur.
-import { construireRequeteArticleIA, validerArticleIA } from '../domain/InterpreterArticleIA.js';
+import {
+  construireRequeteArticleIA, validerArticleIA, extraireSourcesGrounding,
+} from '../domain/InterpreterArticleIA.js';
 
-// Délai maximum avant d'abandonner UN appel Gemini.
-const DELAI_MAX_MS = 30_000;
+// Délai maximum avant d'abandonner UN appel Gemini — 45s (au lieu de 30s) depuis l'activation du
+// grounding Google Search : un aller-retour de recherche s'ajoute avant la synthèse de la réponse.
+const DELAI_MAX_MS = 45_000;
 
 // Une génération dégénérée (JSON invalide/tronqué) est probabiliste — un nombre de tentatives
 // généreux amortit les périodes où le modèle est instable (constat identique à homeFit).
@@ -29,7 +32,7 @@ async function appelerGeminiUneFois(requete) {
   }
 
   if (!reponse.ok) {
-    if (reponse.status === 429) throw new Error("Quota gratuit de l'IA atteint pour le moment, réessaie plus tard.");
+    if (reponse.status === 429) throw new Error("Quota de l'IA atteint pour le moment, réessaie plus tard.");
     if (reponse.status === 404) {
       throw new Error(`Modèle IA "${process.env.GEMINI_MODEL}" indisponible (retiré par Google) — mets à jour GEMINI_MODEL (voir ai.google.dev/gemini-api/docs/models).`);
     }
@@ -38,12 +41,20 @@ async function appelerGeminiUneFois(requete) {
 
   const donnees = await reponse.json();
   const finishReason = donnees.candidates?.[0]?.finishReason;
-  const texte = donnees.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!texte || finishReason === 'MAX_TOKENS') throw new Error('DEGENERE');
+  const groundingMetadata = donnees.candidates?.[0]?.groundingMetadata;
+  // Concaténation défensive de toutes les parts : la réponse tient normalement en une seule part,
+  // mais le grounding est un nouveau mode de réponse pas encore éprouvé en pratique sur ce modèle.
+  const texte = donnees.candidates?.[0]?.content?.parts
+    ?.map((p) => p.text).filter(Boolean).join('');
+  if (!texte || finishReason === 'MAX_TOKENS') {
+    console.error('Réponse Gemini dégénérée', { finishReason, donnees: JSON.stringify(donnees).slice(0, 2000) });
+    throw new Error('DEGENERE');
+  }
 
   try {
-    return JSON.parse(texte);
+    return { corpsJSON: JSON.parse(texte), groundingMetadata };
   } catch {
+    console.error('JSON invalide renvoyé par Gemini', { texte: texte.slice(0, 2000) });
     throw new Error('DEGENERE');
   }
 }
@@ -78,6 +89,10 @@ export const GeminiClient = {
     const requete = construireRequeteArticleIA({
       categorie, sujet, ligneEditoriale, articlesPrecedents,
     });
-    return validerArticleIA(await avecRetry(requete));
+    const { corpsJSON, groundingMetadata } = await avecRetry(requete);
+    return {
+      ...validerArticleIA(corpsJSON),
+      sources: extraireSourcesGrounding(groundingMetadata),
+    };
   },
 };

@@ -1,7 +1,7 @@
 export class Article {
   constructor({
-    id, titre, categorie, contenu, contenuAudio = null, motsCles = [], source = 'manuel', creePar,
-    dateCreation,
+    id, titre, categorie, contenu, contenuAudio = null, motsCles = [], sources = [],
+    source = 'manuel', creePar, dateCreation,
   } = {}) {
     this.id = id;
     this.titre = titre;
@@ -12,6 +12,9 @@ export class Article {
     // sinon retombe sur contenu.
     this.contenuAudio = contenuAudio;
     this.motsCles = motsCles; // tags libres, saisis à la main ou proposés par la génération IA
+    // Sources du grounding Google Search ({uri, titre}[]) — uniquement pour source: 'ia', vide si
+    // le modèle n'a pas déclenché de recherche sur cet appel.
+    this.sources = sources;
     this.source = source; // 'manuel' | 'ia' | 'import_md' | 'api'
     this.creePar = creePar;
     this.dateCreation = dateCreation;
@@ -28,6 +31,7 @@ export class Article {
       contenu: this.contenu,
       contenuAudio: this.contenuAudio,
       motsCles: this.motsCles,
+      sources: this.sources,
       source: this.source,
       creePar: this.creePar,
       dateCreation: this.dateCreation,
