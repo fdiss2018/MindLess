@@ -8,6 +8,14 @@ import { CATEGORIES } from './Categories.js';
 // anti-hallucination plus bas plutôt qu'une simple suppression de ces règles.
 const OUTIL_RECHERCHE_GOOGLE = [{ google_search: {} }];
 
+// IMPORTANT — vérifié empiriquement (2026-09, gemini-3.5-flash-lite, endpoint v1beta) :
+// `responseSchema`/`responseMimeType` combinés à `tools: google_search` empêchent
+// systématiquement le grounding de se déclencher (0 succès sur 7 essais avec schéma, contre
+// grounding effectif sur le même prompt sans schéma) — malgré la documentation Google indiquant
+// que Gemini 3 supporte cette combinaison. Le JSON est donc demandé par instruction dans le prompt
+// ci-dessous plutôt que par `responseSchema` ; GeminiClient.js s'appuie sur son JSON.parse +
+// retry DEGENERE existant comme filet de sécurité pour ce mode "JSON en texte libre".
+
 // Construit le corps de requête envoyé à l'API Gemini (generateContent) — voir
 // repositories/GeminiClient.js pour l'appel réseau. Fonction pure, aucun appel réseau ici (même
 // séparation que homeFit/backend/src/domain/InterpreterExerciceIA.js).
@@ -46,7 +54,8 @@ ${articlesPrecedents.map((a) => `- [${(a.dateCreation || '').slice(0, 10)}] "${a
   const prompt = `${persona}${contexteArticlesPrecedents}
 ${sujet ? `\nSujet précis demandé par l'utilisateur : "${sujet}".` : ''}
 
-Réponds UNIQUEMENT avec un objet JSON de cette forme :
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balise de code
+(pas de \`\`\`json\`\`\`), de cette forme exacte :
 {
   "titre": "Titre accrocheur de l'article",
   "contenu": "Version à LIRE à l'écran : plusieurs paragraphes, texte brut sans markdown.",
@@ -81,20 +90,12 @@ Règles à respecter :
   return {
     contents: [{ parts: [{ text: prompt }] }],
     tools: OUTIL_RECHERCHE_GOOGLE,
+    // Pas de responseMimeType/responseSchema ici — voir la note ci-dessus sur leur incompatibilité
+    // empirique avec le grounding sur ce modèle. Le format JSON est entièrement porté par
+    // l'instruction du prompt.
     generationConfig: {
-      responseMimeType: 'application/json',
       maxOutputTokens: 4096,
       temperature: 0.4,
-      responseSchema: {
-        type: 'OBJECT',
-        properties: {
-          titre: { type: 'STRING' },
-          contenu: { type: 'STRING' },
-          contenuAudio: { type: 'STRING' },
-          motsCles: { type: 'ARRAY', items: { type: 'STRING' } },
-        },
-        required: ['titre', 'contenu', 'contenuAudio', 'motsCles'],
-      },
     },
   };
 }

@@ -19,10 +19,15 @@ describe('construireRequeteArticleIA', () => {
     expect(requete.contents[0].parts[0].text).toContain('exposition Cézanne');
   });
 
-  it('demande une réponse JSON structurée avec titre, contenu, contenuAudio et motsCles', () => {
+  it('demande une réponse JSON par instruction, sans responseSchema (incompatible avec le grounding sur ce modèle)', () => {
     const requete = construireRequeteArticleIA({ categorie: 'marseille' });
-    expect(requete.generationConfig.responseSchema.required)
-      .toEqual(['titre', 'contenu', 'contenuAudio', 'motsCles']);
+    const texte = requete.contents[0].parts[0].text;
+    expect(texte).toContain('"titre"');
+    expect(texte).toContain('"contenu"');
+    expect(texte).toContain('"contenuAudio"');
+    expect(texte).toContain('"motsCles"');
+    expect(requete.generationConfig.responseSchema).toBeUndefined();
+    expect(requete.generationConfig.responseMimeType).toBeUndefined();
   });
 
   it('utilise la ligne éditoriale personnalisée à la place du prompt générique quand elle est fournie', () => {
