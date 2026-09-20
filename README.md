@@ -147,7 +147,7 @@ Réponse `201 { "id": "..." }` ; `400` si `titre`/`categorie`/`contenu` invalide
 `X-Test-Uid` n'est pas le créateur du foyer, `404` si `:foyerId` n'existe pas. Catégories valides :
 voir `backend/src/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
 `sortir_marseille`, `ecologie`, `ia`, `economie_finances`, `societe`, `international`,
-`economie_entreprises`, `actualite_locale`).
+`economie_entreprises`, `actualite_locale`, `mails`).
 
 ### API publique (veille) — lire les articles d'un foyer sans authentification
 
