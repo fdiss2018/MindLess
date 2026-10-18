@@ -51,8 +51,29 @@ dessus pour assurer une continuité : ne répète pas une information déjà cou
 ${articlesPrecedents.map((a) => `- [${(a.dateCreation || '').slice(0, 10)}] "${a.titre}" — ${a.extrait}`).join('\n')}`
     : '';
 
-  const prompt = `${persona}${contexteArticlesPrecedents}
-${sujet ? `\nSujet précis demandé par l'utilisateur : "${sujet}".` : ''}
+  // Un sujet précis doit prendre le pas sur toute instruction de la ligne éditoriale ci-dessus qui
+  // demanderait au modèle de sélectionner lui-même plusieurs actualités de la période (cas des 7
+  // personas copiés depuis exemple/gem_gemini_<categorie>.prompt, conçus à l'origine pour un scan
+  // hebdomadaire autonome, pas pour approfondir un sujet unique) — sans cette instruction explicite,
+  // un sujet fourni se retrouvait noyé dans un persona de plusieurs centaines de lignes orienté vers
+  // un tout autre objectif, et le modèle produisait un texte générique ne traitant ni vraiment le
+  // sujet demandé, ni la mission de la ligne éditoriale.
+  const instructionSujet = sujet
+    ? `
+
+Sujet précis demandé par l'utilisateur : "${sujet}". Cet article doit porter EXCLUSIVEMENT sur ce
+sujet — ignore toute instruction ci-dessus qui te demanderait de sélectionner toi-même plusieurs
+actualités de la période ou de produire un panorama général : il n'y a qu'un seul sujet à traiter,
+celui-ci.
+Si ce terme ne correspond à aucun sujet réel que tu identifies clairement (faute de frappe,
+approximation, dictée vocale mal transcrite...), identifie d'abord le sujet réel le plus probable
+qu'il désigne (ex. un nom proche d'un concept ou d'un dispositif connu) plutôt que de rester
+délibérément vague faute de correspondance exacte — cette tolérance ne porte que sur l'identification
+du sujet lui-même, pas sur les faits datés ou récents le concernant, qui restent soumis aux règles de
+vérification ci-dessous.`
+    : '';
+
+  const prompt = `${persona}${contexteArticlesPrecedents}${instructionSujet}
 
 Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après, sans balise de code
 (pas de \`\`\`json\`\`\`), de cette forme exacte :

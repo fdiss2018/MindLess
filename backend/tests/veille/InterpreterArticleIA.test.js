@@ -19,6 +19,23 @@ describe('construireRequeteArticleIA', () => {
     expect(requete.contents[0].parts[0].text).toContain('exposition Cézanne');
   });
 
+  it('donne au sujet précis la priorité sur une ligne éditoriale orientée scan autonome', () => {
+    const requete = construireRequeteArticleIA({
+      categorie: 'economie_finances',
+      sujet: 'taxe Tobin',
+      ligneEditoriale: 'Sélectionne toi-même les 5 actualités majeures de la période.',
+    });
+    const texte = requete.contents[0].parts[0].text;
+    expect(texte).toContain('"taxe Tobin"');
+    expect(texte).toContain('EXCLUSIVEMENT sur ce');
+    expect(texte).toContain('ignore toute instruction ci-dessus');
+  });
+
+  it("n'ajoute aucune instruction de priorité sur le sujet quand aucun sujet n'est fourni", () => {
+    const requete = construireRequeteArticleIA({ categorie: 'culture' });
+    expect(requete.contents[0].parts[0].text).not.toContain('EXCLUSIVEMENT sur ce');
+  });
+
   it('demande une réponse JSON par instruction, sans responseSchema (incompatible avec le grounding sur ce modèle)', () => {
     const requete = construireRequeteArticleIA({ categorie: 'marseille' });
     const texte = requete.contents[0].parts[0].text;
