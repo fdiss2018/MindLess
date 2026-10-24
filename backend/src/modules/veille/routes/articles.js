@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ArticleRepository } from '../repositories/ArticleRepository.js';
-import { GeminiClient } from '../repositories/GeminiClient.js';
+import { GenerationArticleIA } from '../repositories/GenerationArticleIA.js';
 import { LigneEditorialeRepository } from '../repositories/LigneEditorialeRepository.js';
 import {
   validerChampsArticle, extraireResume, normaliserMotsCles, filtrerArticles,
@@ -50,7 +50,7 @@ articlesRouter.post('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Génération IA (Gemini, voir repositories/GeminiClient.js), avec grounding Google Search actif à
+// Génération IA (Gemini, voir repositories/GenerationArticleIA.js), avec grounding Google Search actif à
 // chaque appel — le contenu n'est donc pas garanti factuellement exact pour autant (le modèle ne
 // déclenche pas toujours une recherche, voir InterpreterArticleIA.js) : source: 'ia' permet au
 // front d'afficher un badge d'avertissement plutôt que de laisser croire à du factuel vérifié.
@@ -86,7 +86,7 @@ articlesRouter.post('/generer', async (req, res, next) => {
 
     const {
       titre, contenu, contenuAudio, motsCles, sources,
-    } = await GeminiClient.genererArticleParIA({
+    } = await GenerationArticleIA.genererArticleParIA({
       categorie, sujet, ligneEditoriale, articlesPrecedents,
     });
     const id = await ArticleRepository.creer(req.params.foyerId, {

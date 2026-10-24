@@ -13,11 +13,11 @@ const OUTIL_RECHERCHE_GOOGLE = [{ google_search: {} }];
 // systématiquement le grounding de se déclencher (0 succès sur 7 essais avec schéma, contre
 // grounding effectif sur le même prompt sans schéma) — malgré la documentation Google indiquant
 // que Gemini 3 supporte cette combinaison. Le JSON est donc demandé par instruction dans le prompt
-// ci-dessous plutôt que par `responseSchema` ; GeminiClient.js s'appuie sur son JSON.parse +
+// ci-dessous plutôt que par `responseSchema` ; coeur/repositories/GeminiClient.js s'appuie sur son JSON.parse +
 // retry DEGENERE existant comme filet de sécurité pour ce mode "JSON en texte libre".
 
 // Construit le corps de requête envoyé à l'API Gemini (generateContent) — voir
-// repositories/GeminiClient.js pour l'appel réseau. Fonction pure, aucun appel réseau ici (même
+// repositories/GenerationArticleIA.js pour l'appel réseau. Fonction pure, aucun appel réseau ici (même
 // séparation que homeFit/backend/src/domain/InterpreterExerciceIA.js).
 //
 // `ligneEditoriale` (optionnelle) : persona/prompt système défini par le créateur du foyer pour
