@@ -4,7 +4,8 @@ import { GeminiClient } from '../../../coeur/repositories/GeminiClient.js';
 import { NoteMemoire } from '../domain/NoteMemoire.js';
 import { ChapitreMemoire } from '../domain/ChapitreMemoire.js';
 import {
-  LONGUEUR_MAX_NOTE, notesASynthetiser, construireRequeteChapitre, validerChapitreIA, normaliserParametres,
+  LONGUEUR_MAX_NOTE, LONGUEUR_MAX_STYLE, TYPES_NOTE, typeNote, selectionnerPourSynthese,
+  construireRequeteChapitre, validerChapitreIA, normaliserParametres,
 } from '../domain/SyntheseMemoires.js';
 
 // Monté sur /api/foyers/:foyerId/memoires. Toutes les routes portent sur les mémoires de
@@ -18,15 +19,18 @@ memoiresRouter.get('/notes', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Body : { texte, type? } — type 'souvenir' (défaut) ou 'instruction'.
 memoiresRouter.post('/notes', async (req, res, next) => {
   try {
     const texte = typeof req.body.texte === 'string' ? req.body.texte.trim() : '';
+    const type = req.body.type ?? 'souvenir';
+    if (!TYPES_NOTE.includes(type)) return res.status(400).json({ erreur: 'Type de note inconnu.' });
     if (!texte) return res.status(400).json({ erreur: 'La note est vide.' });
     if (texte.length > LONGUEUR_MAX_NOTE) {
       return res.status(400).json({ erreur: `La note dépasse ${LONGUEUR_MAX_NOTE} caractères.` });
     }
 
-    const note = new NoteMemoire({ texte, dateCreation: new Date().toISOString() });
+    const note = new NoteMemoire({ texte, type, dateCreation: new Date().toISOString() });
     const id = await MemoiresRepository.ajouterNote(req.params.foyerId, req.uid, note);
     res.status(201).json({ id });
   } catch (err) { next(err); }
@@ -60,17 +64,23 @@ memoiresRouter.get('/parametres', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Remplace l'ensemble des paramètres (Settings envoie toujours tous les champs) :
+// { supprimerNotesApresSynthese, styleSynthese }.
 memoiresRouter.put('/parametres', async (req, res, next) => {
   try {
     const parametres = normaliserParametres(req.body);
+    if (parametres.styleSynthese.length > LONGUEUR_MAX_STYLE) {
+      return res.status(400).json({ erreur: `Le style dépasse ${LONGUEUR_MAX_STYLE} caractères.` });
+    }
     await MemoiresRepository.enregistrerParametres(req.params.foyerId, req.uid, parametres);
     res.json(parametres);
   } catch (err) { next(err); }
 });
 
-// Synthèse IA : les notes pas encore synthétisées deviennent un nouveau chapitre (le dernier des
-// mémoires), puis sont supprimées ou marquées selon le paramètre du membre. Pas de grounding : les
-// souvenirs sont personnels, l'IA ne fait que rédiger à partir des notes.
+// Synthèse IA : les souvenirs pas encore utilisés deviennent un nouveau chapitre (le dernier des
+// mémoires), écrit dans le style des paramètres du membre et selon ses instructions en attente ;
+// souvenirs et instructions sont ensuite supprimés ou rattachés au chapitre selon son paramètre.
+// Pas de grounding : les souvenirs sont personnels, l'IA ne fait que rédiger à partir des notes.
 memoiresRouter.post('/synthetiser', async (req, res, next) => {
   try {
     const { foyerId } = req.params;
@@ -80,25 +90,27 @@ memoiresRouter.post('/synthetiser', async (req, res, next) => {
       MemoiresRepository.obtenirParametres(foyerId, req.uid),
     ]);
 
-    const aSynthetiser = notesASynthetiser(notes);
-    if (aSynthetiser.length === 0) {
-      return res.status(400).json({ erreur: 'Aucune nouvelle note à synthétiser.' });
+    const { souvenirs, instructions } = selectionnerPourSynthese(notes);
+    if (souvenirs.length === 0) {
+      return res.status(400).json({ erreur: 'Aucun nouveau souvenir à synthétiser.' });
     }
 
-    const { corpsJSON } = await GeminiClient.generer(
-      construireRequeteChapitre({ notes: aSynthetiser, chapitresPrecedents: chapitres }),
-    );
+    const { corpsJSON } = await GeminiClient.generer(construireRequeteChapitre({
+      souvenirs, instructions, style: parametres.styleSynthese, chapitresPrecedents: chapitres,
+    }));
     const { titre, contenu } = validerChapitreIA(corpsJSON);
 
+    const noteIds = [...souvenirs, ...instructions].map((n) => n.id);
     const chapitre = await MemoiresRepository.enregistrerSynthese(foyerId, req.uid, new ChapitreMemoire({
-      titre, contenu, noteIds: aSynthetiser.map((n) => n.id), dateCreation: new Date().toISOString(),
+      titre, contenu, noteIds, dateCreation: new Date().toISOString(),
     }), parametres.supprimerNotesApresSynthese);
 
+    const souvenirsDisponibles = notes.filter((n) => !n.chapitreId && typeNote(n) === 'souvenir').length;
     res.status(201).json({
       chapitre,
       numero: chapitres.length + 1,
       notesSupprimees: parametres.supprimerNotesApresSynthese,
-      notesRestantes: notes.filter((n) => !n.chapitreId).length - aSynthetiser.length,
+      souvenirsRestants: souvenirsDisponibles - souvenirs.length,
     });
   } catch (err) { next(err); }
 });

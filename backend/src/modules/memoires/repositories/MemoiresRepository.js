@@ -4,7 +4,7 @@ import { ChapitreMemoire } from '../domain/ChapitreMemoire.js';
 import { normaliserParametres } from '../domain/SyntheseMemoires.js';
 
 // Les mémoires sont personnelles : tout est rangé sous l'uid du membre, dans son foyer.
-//   foyers/{foyerId}/memoires/{uid}                         paramètres du membre
+//   foyers/{foyerId}/memoires/{uid}                         paramètres du membre (voir Settings)
 //   foyers/{foyerId}/memoires/{uid}/notes/{noteId}
 //   foyers/{foyerId}/memoires/{uid}/chapitres/{chapitreId}
 const racine = (foyerId, uid) => db.collection('foyers').doc(foyerId).collection('memoires').doc(uid);

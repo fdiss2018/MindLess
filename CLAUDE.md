@@ -70,7 +70,7 @@ backend/
 public/
   *.html                          pages à plat, cœur et modules (voir plus bas)
   coeur/  services/ models/ utils/
-  modules/<id>/  services/ models/ utils/  accueil.js (optionnel)
+  modules/<id>/  services/ models/ utils/  accueil.js, parametres.js (optionnels)
 tests/coeur/  tests/modules/<id>/
 ```
 
@@ -88,8 +88,9 @@ déclarée dans leur script, par `ouvrirSession({ module: '<id>' })` (voir plus 
 
 1. **Un module dépend du cœur, jamais l'inverse.** Le cœur ne connaît des modules que leurs
    identifiants (catalogue `coeur/domain/AccesModules.js`) ; seuls les points de composition les
-   importent : `backend/server.js` (manifestes) et `index.html` (chargement dynamique de
-   `modules/<id>/accueil.js`, voir "Points d'extension").
+   importent : `backend/server.js` (manifestes), `index.html` et `settings.html` (chargement
+   dynamique de `modules/<id>/accueil.js` et `modules/<id>/parametres.js`, voir "Points
+   d'extension").
 2. **Un module n'importe jamais le code interne d'un autre module.** Côté backend, une dépendance
    entre modules passe uniquement par `modules/<fournisseur>/api.js`, qui expose des données
    simples (jamais un repository ni une classe du domaine) — seul cas aujourd'hui : `courses` →
@@ -143,6 +144,12 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
   module (les identifiants sont une copie assumée du catalogue backend). `badgeAccueil: true` →
   le module fournit `modules/<id>/accueil.js` exportant `calculerBadge(foyerId)`, chargé
   dynamiquement par `index.html` seulement si le module est ouvert (voiture : rappels d'entretien).
+  `parametres: true` → le module fournit `modules/<id>/parametres.js` exportant
+  `afficherParametres(conteneur, session)`, qui construit et enregistre lui-même les réglages
+  **personnels** du module ; `settings.html` lui donne une carte titrée du nom du module, seulement
+  si le module est ouvert à l'utilisateur (memoires : suppression des notes, style des chapitres).
+  Les réglages d'administration à l'échelle du foyer, eux, restent derrière Admin (ex. lignes
+  éditoriales de veille).
 - **Ouverture de page** `ouvrirSession({ module, administrateur, foyerRequis })` : `module` pour une
   page de module, `administrateur: true` pour une page réservée à l'administrateur, `foyerRequis:
   false` uniquement pour `settings.html` (création/jonction d'un foyer).
@@ -155,7 +162,9 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
    dans `backend/server.js` (`monterModule` refuse au démarrage un module absent du catalogue).
    Routers en `Router({ mergeParams: true })`, sans middleware d'accès.
 3. Front : `public/modules/<id>/{services,models,utils}/` ; pages `<id>*.html` à la racine de
-   `public/`, chacune démarrant par `await ouvrirSession({ module: '<id>' })`.
+   `public/`, chacune démarrant par `await ouvrirSession({ module: '<id>' })`. Réglages personnels
+   de l'utilisateur : dans Settings via `parametres.js` (point d'extension `parametres`), pas sur
+   les pages du module.
 4. Données sous `foyers/{foyerId}/<collection>` ; dans `firestore.rules`, collection fermée
    (`allow read, write: if false`) ou, si une lecture temps réel est indispensable,
    `allow read: if aAccesModule(foyerId, '<id>')`.
@@ -174,7 +183,8 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
   LectureVocaleService}.js`, `models/{Utilisateur,Foyer}.js`, `utils/{Modules,DateSemaine}.js`
 - **Pages** : `index.html` (accueil : tuiles des modules ouverts + Settings + Admin), `login.html`,
   `settings.html` (ex-"Mon foyer", visible de tous : foyer, membres et leurs modules, code
-  d'invitation ; sert aussi à créer ou rejoindre un foyer), `admin.html`, `acces-modules.html`,
+  d'invitation, puis une carte de réglages par module ouvert qui en déclare ; sert aussi à créer ou
+  rejoindre un foyer), `admin.html`, `acces-modules.html`,
   `404.html`
 
 Deux briques techniques du cœur sont partagées par plusieurs modules (règle de dépendance n°2) :
@@ -491,10 +501,10 @@ articles les plus récents de la même catégorie (hors l'article courant).
 - **Backend** : `domain/{NoteMemoire,ChapitreMemoire,SyntheseMemoires}.js`,
   `repositories/MemoiresRepository.js`, `routes/memoires.js`
 - **Frontend** : `services/{MemoiresService,DicteeVocaleService}.js`,
-  `models/{NoteMemoire,ChapitreMemoire}.js`, `utils/TexteDicte.js` (lecture vocale :
-  `coeur/services/LectureVocaleService.js`)
-- **Pages** : `memoires.html` (dicter, garder, relire et écouter ses notes, synthétiser, réglage),
-  `memoires-livre.html` (les chapitres, à lire ou écouter)
+  `models/{NoteMemoire,ChapitreMemoire}.js`, `utils/TexteDicte.js`, `parametres.js` (réglages dans
+  Settings) — lecture vocale : `coeur/services/LectureVocaleService.js`
+- **Pages** : `memoires.html` (dicter, garder comme souvenir ou comme instruction, relire et écouter,
+  synthétiser), `memoires-livre.html` (les chapitres, à lire ou écouter)
 
 Pensé pour des personnes âgées, peu à l'aise avec un clavier : textes et boutons agrandis
 (`body.module-memoires` dans `style.css`), un gros bouton micro, lecture à voix haute (débit
@@ -514,18 +524,35 @@ Android) ; arrêt automatique après 2 minutes sans parole. `utils/TexteDicte.js
 phrase reconnue en forme (majuscule, point final), la reconnaissance vocale ne ponctuant pas. Le
 texte reste modifiable au clavier avant d'être gardé.
 
-**Synthèse** (`POST .../memoires/synthetiser`) : les notes pas encore synthétisées (au plus
-`MAX_NOTES_PAR_CHAPITRE` = 50, les plus anciennes d'abord) deviennent un nouveau chapitre, ajouté à
-la fin des mémoires. `domain/SyntheseMemoires.construireRequeteChapitre` demande à Gemini un
-chapitre à la première personne, **fidèle aux notes** (aucun fait, nom, date ou lieu inventé ;
-correction des erreurs de transcription évidentes), avec les titres des chapitres précédents en
-contexte ; pas de grounding (souvenirs personnels), donc JSON imposé par `responseSchema` —
-contrairement à la veille. `validerChapitreIA` refuse un titre ou un contenu vide. Chapitre et
-notes sont écrits en un seul batch : les notes sont **supprimées** ou **rattachées au chapitre**
-(`chapitreId`) selon le réglage du membre `supprimerNotesApresSynthese` (par défaut `false` : notes
-conservées, rangées dans "Déjà dans mes mémoires"). Supprimer un chapitre remet ses notes conservées
-"à synthétiser" — c'est le moyen de refaire un chapitre qui ne convient pas. Le numéro d'un
-chapitre n'est pas stocké : il découle de l'ordre de création.
+**Souvenirs et instructions** : une note dictée est gardée soit comme **souvenir** (matière du
+chapitre), soit comme **instruction** (consigne pour écrire le prochain chapitre, ex. « parle
+surtout de mon père ») — champ `type` de la note ; une note sans type (antérieure aux instructions)
+est un souvenir. Les instructions en attente ont leur propre liste sur `memoires.html`. Un chapitre
+ne s'écrit qu'à partir d'au moins un souvenir : des instructions seules ne suffisent pas (400).
+
+**Réglages** (personnels, dans **Settings** via `parametres.js` — absents de Settings si le module
+n'est pas ouvert à l'utilisateur) : `supprimerNotesApresSynthese` (**coché par défaut** : seul un
+`false` explicite conserve les notes) et `styleSynthese`, complément de prompt libre (2 000
+caractères au plus) qui définit le style des chapitres. `PUT .../memoires/parametres` remplace
+l'ensemble des réglages.
+
+**Synthèse** (`POST .../memoires/synthetiser`) : les souvenirs pas encore utilisés (au plus
+`MAX_NOTES_PAR_CHAPITRE` = 50, les plus anciens d'abord) et les instructions en attente (au plus 20)
+deviennent un nouveau chapitre, ajouté à la fin des mémoires. `domain/SyntheseMemoires.
+construireRequeteChapitre` suit la trame **« prends toutes mes notes, fais-en la synthèse, applique
+le style défini dans les paramètres et applique les instructions suivantes »** : style du membre
+(sinon style par défaut simple et chaleureux), instructions en liste, titres des chapitres précédents
+en contexte, puis les souvenirs — les instructions ne sont jamais mêlées aux souvenirs. Quels que
+soient le style et les instructions, les règles de fond restent imposées : première personne,
+**fidélité aux notes** (aucun fait, nom, date ou lieu inventé ; correction des erreurs de
+transcription évidentes) — un style ou une instruction ne peut pas les lever, comme la mise en garde
+anti-hallucination de la veille. Pas de grounding (souvenirs personnels), donc JSON imposé par
+`responseSchema` — contrairement à la veille. `validerChapitreIA` refuse un titre ou un contenu
+vide. Chapitre et notes (souvenirs et instructions utilisés) sont écrits en un seul batch : les
+notes sont **supprimées** ou **rattachées au chapitre** (`chapitreId`, rangées dans "Déjà dans mes
+mémoires") selon `supprimerNotesApresSynthese`. Supprimer un chapitre remet ses notes conservées
+"à synthétiser" — moyen de refaire un chapitre, seulement si les notes ont été conservées. Le numéro
+d'un chapitre n'est pas stocké : il découle de l'ordre de création.
 
 ## Modèle de données Firestore
 
@@ -580,10 +607,12 @@ foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une
 
 ── module memoires (personnel : rangé sous l'uid du membre) ──────────────────────────────────
 foyers/{foyerId}/memoires/{uid}
-  { supprimerNotesApresSynthese: boolean }          # réglage du membre, absent = false
+  { supprimerNotesApresSynthese: boolean,           # réglages du membre (Settings) ; absent = true
+    styleSynthese: string }                         # complément de prompt, '' = style par défaut
 
 foyers/{foyerId}/memoires/{uid}/notes/{noteId}
-  { texte, chapitreId: string|null, dateCreation }  # chapitreId null = encore à synthétiser
+  { texte, type: 'souvenir'|'instruction',          # type absent = souvenir
+    chapitreId: string|null, dateCreation }         # chapitreId null = encore à synthétiser
 
 foyers/{foyerId}/memoires/{uid}/chapitres/{chapitreId}
   { titre, contenu, noteIds: [], dateCreation }     # contenu : paragraphes séparés par une ligne vide

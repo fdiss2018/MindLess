@@ -20,7 +20,7 @@
     <a href="memoires-livre.html" class="btn-secondaire btn-large" id="lien-livre">📚 Lire mes mémoires</a>
 
     <div class="carte">
-      <p class="carte-titre">Nouveau souvenir</p>
+      <p class="carte-titre">Nouvelle note</p>
       <button id="btn-dicter" class="btn-micro">
         <span class="icone-micro" id="icone-micro">🎤</span>
         <span id="libelle-micro">Appuie ici et parle</span>
@@ -30,33 +30,41 @@
         téléphone, ou ouvre MindLess avec Chrome.
       </p>
       <textarea id="texte-note" class="input texte-memoire" rows="6"
-        placeholder="Ton souvenir s'écrit ici pendant que tu parles…"></textarea>
-      <button id="btn-garder" class="btn-primaire btn-large" disabled>💾 Garder ce souvenir</button>
-      <button id="btn-effacer" class="btn-secondaire btn-large">Effacer</button>
+        placeholder="Ce que tu dis s'écrit ici…"></textarea>
+      <button id="btn-garder-souvenir" class="btn-primaire btn-large" disabled>💾 Garder comme souvenir</button>
+      <button id="btn-garder-instruction" class="btn-secondaire btn-large" disabled>📝 Garder comme instruction</button>
+      <p class="carte-desc">
+        Une instruction dit à l'IA comment écrire le prochain chapitre, par exemple « parle surtout
+        de mon père » ou « termine par un mot pour mes petits-enfants ».
+      </p>
+      <button id="btn-effacer" class="btn-secondaire">Effacer</button>
       <p id="msg-note" class="msg hidden"></p>
     </div>
 
     <div class="carte">
-      <p class="carte-titre" id="titre-notes">Mes notes</p>
-      <div id="liste-notes"></div>
-      <p id="vide-notes" class="vide hidden">Pas encore de note. Appuie sur le micro et raconte un souvenir.</p>
+      <p class="carte-titre" id="titre-souvenirs">Mes souvenirs</p>
+      <div id="liste-souvenirs"></div>
+      <p id="vide-souvenirs" class="vide hidden">Pas encore de souvenir. Appuie sur le micro et raconte.</p>
+    </div>
+
+    <div class="carte hidden" id="carte-instructions">
+      <p class="carte-titre" id="titre-instructions">Mes instructions pour le prochain chapitre</p>
+      <div id="liste-instructions"></div>
+    </div>
+
+    <div class="carte">
       <button id="btn-synthetiser" class="btn-primaire btn-large" disabled>✨ Synthétiser en chapitre</button>
-      <p class="carte-desc">L'IA écrit un chapitre de tes mémoires à partir de ces notes, sans rien inventer.</p>
+      <p class="carte-desc">
+        L'IA écrit un chapitre à partir de tes souvenirs, dans ton style et en suivant tes
+        instructions, sans rien inventer. Style et suppression des notes :
+        <a href="settings.html#parametres-memoires">réglages dans Settings</a>.
+      </p>
       <p id="msg-synthese" class="msg hidden"></p>
     </div>
 
     <div class="carte hidden" id="carte-notes-utilisees">
       <p class="carte-titre">Déjà dans mes mémoires</p>
       <div id="liste-notes-utilisees"></div>
-    </div>
-
-    <div class="carte">
-      <p class="carte-titre">Réglage</p>
-      <label class="ligne-acces">
-        <input type="checkbox" id="param-supprimer"> Supprimer mes notes une fois le chapitre écrit
-      </label>
-      <p class="carte-desc">Sinon, elles restent ici, rangées dans « Déjà dans mes mémoires ».</p>
-      <p id="msg-param" class="msg hidden"></p>
     </div>
 
     <p id="chargement" class="chargement">Chargement...</p>
@@ -76,15 +84,16 @@
     const iconeMicro = document.getElementById('icone-micro');
     const libelleMicro = document.getElementById('libelle-micro');
     const texteNote = document.getElementById('texte-note');
-    const btnGarder = document.getElementById('btn-garder');
+    const btnGarderSouvenir = document.getElementById('btn-garder-souvenir');
+    const btnGarderInstruction = document.getElementById('btn-garder-instruction');
     const btnSynthetiser = document.getElementById('btn-synthetiser');
-    const listeNotes = document.getElementById('liste-notes');
-    const listeNotesUtilisees = document.getElementById('liste-notes-utilisees');
-    const paramSupprimer = document.getElementById('param-supprimer');
 
     let foyerIdCourant = null;
+    let parametres = null;
     let minuterieInactivite = null;
     let boutonEnLecture = null;
+    let nbSouvenirs = 0;
+    let nbInstructions = 0;
 
     function afficherMsg(id, texte, erreur = false) {
       const msg = document.getElementById(id);
@@ -94,10 +103,13 @@
     }
 
     const formaterDate = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
     // ── Dictée
-    function mettreAJourBoutonGarder() {
-      btnGarder.disabled = DicteeVocaleService.enCours() || !texteNote.value.trim();
+    function mettreAJourBoutonsGarder() {
+      const impossible = DicteeVocaleService.enCours() || !texteNote.value.trim();
+      btnGarderSouvenir.disabled = impossible;
+      btnGarderInstruction.disabled = impossible;
     }
 
     function afficherEtatDictee(enCours) {
@@ -105,7 +117,7 @@
       iconeMicro.textContent = enCours ? '⏹️' : '🎤';
       libelleMicro.textContent = enCours ? "J'ai fini de parler" : 'Appuie ici et parle';
       texteNote.readOnly = enCours;
-      mettreAJourBoutonGarder();
+      mettreAJourBoutonsGarder();
     }
 
     function relancerMinuterie() {
@@ -141,27 +153,32 @@
       afficherEtatDictee(true);
     });
 
-    texteNote.addEventListener('input', mettreAJourBoutonGarder);
+    texteNote.addEventListener('input', mettreAJourBoutonsGarder);
 
     document.getElementById('btn-effacer').addEventListener('click', () => {
       if (DicteeVocaleService.enCours()) DicteeVocaleService.arreter();
       texteNote.value = '';
-      mettreAJourBoutonGarder();
+      mettreAJourBoutonsGarder();
     });
 
-    btnGarder.addEventListener('click', async () => {
-      btnGarder.disabled = true;
+    async function garder(type) {
+      btnGarderSouvenir.disabled = true;
+      btnGarderInstruction.disabled = true;
       try {
-        await MemoiresService.ajouterNote(foyerIdCourant, texteNote.value);
+        await MemoiresService.ajouterNote(foyerIdCourant, texteNote.value, type);
         texteNote.value = '';
-        afficherMsg('msg-note', 'Souvenir gardé dans tes notes.');
+        afficherMsg('msg-note', type === 'instruction'
+          ? 'Instruction gardée pour le prochain chapitre.'
+          : 'Souvenir gardé.');
         await chargerNotes();
       } catch (err) {
-        afficherMsg('msg-note', err.message || "Le souvenir n'a pas pu être gardé.", true);
+        afficherMsg('msg-note', err.message || "La note n'a pas pu être gardée.", true);
       } finally {
-        mettreAJourBoutonGarder();
+        mettreAJourBoutonsGarder();
       }
-    });
+    }
+    btnGarderSouvenir.addEventListener('click', () => garder('souvenir'));
+    btnGarderInstruction.addEventListener('click', () => garder('instruction'));
 
     // ── Lecture à voix haute (un seul texte lu à la fois)
     function basculerLecture(bouton, texte) {
@@ -181,7 +198,7 @@
       });
     }
 
-    // ── Notes
+    // ── Notes (souvenirs et instructions)
     function creerNote(note, legende) {
       const div = document.createElement('div');
       div.className = 'note-memoire';
@@ -214,42 +231,56 @@
       return div;
     }
 
+    function remplir(idListe, notes, legende) {
+      const liste = document.getElementById(idListe);
+      liste.innerHTML = '';
+      notes.forEach((note) => liste.appendChild(creerNote(note, legende(note))));
+    }
+
     async function chargerNotes() {
       const [notes, chapitres] = await Promise.all([
         MemoiresService.listerNotes(foyerIdCourant),
         MemoiresService.listerChapitres(foyerIdCourant),
       ]);
-      const numeroChapitre = Object.fromEntries(chapitres.map((c, i) => [c.id, { numero: i + 1, titre: c.titre }]));
-      const aSynthetiser = notes.filter((n) => !n.chapitreId);
+      const chapitreParId = Object.fromEntries(chapitres.map((c, i) => [c.id, { numero: i + 1, titre: c.titre }]));
+      const souvenirs = notes.filter((n) => !n.chapitreId && !n.estInstruction());
+      const instructions = notes.filter((n) => !n.chapitreId && n.estInstruction());
       const utilisees = notes.filter((n) => n.chapitreId);
+      nbSouvenirs = souvenirs.length;
+      nbInstructions = instructions.length;
 
       document.getElementById('chargement').classList.add('hidden');
       document.getElementById('lien-livre').textContent = chapitres.length
-        ? `📚 Lire mes mémoires (${chapitres.length} chapitre${chapitres.length > 1 ? 's' : ''})`
+        ? `📚 Lire mes mémoires (${pluriel(chapitres.length, 'chapitre')})`
         : '📚 Lire mes mémoires';
 
-      listeNotes.innerHTML = '';
-      aSynthetiser.forEach((note) => listeNotes.appendChild(creerNote(note, `Dicté le ${formaterDate(note.dateCreation)}`)));
-      document.getElementById('vide-notes').classList.toggle('hidden', aSynthetiser.length > 0);
-      document.getElementById('titre-notes').textContent = aSynthetiser.length
-        ? `Mes notes (${aSynthetiser.length})` : 'Mes notes';
-      btnSynthetiser.disabled = aSynthetiser.length === 0;
-      btnSynthetiser.textContent = aSynthetiser.length
-        ? `✨ Synthétiser en chapitre (${aSynthetiser.length} note${aSynthetiser.length > 1 ? 's' : ''})`
-        : '✨ Synthétiser en chapitre';
+      remplir('liste-souvenirs', souvenirs, (n) => `Dicté le ${formaterDate(n.dateCreation)}`);
+      document.getElementById('vide-souvenirs').classList.toggle('hidden', nbSouvenirs > 0);
+      document.getElementById('titre-souvenirs').textContent = nbSouvenirs ? `Mes souvenirs (${nbSouvenirs})` : 'Mes souvenirs';
 
-      listeNotesUtilisees.innerHTML = '';
-      utilisees.forEach((note) => {
-        const chapitre = numeroChapitre[note.chapitreId];
-        const legende = chapitre ? `Chapitre ${chapitre.numero} — ${chapitre.titre}` : 'Dans un chapitre';
-        listeNotesUtilisees.appendChild(creerNote(note, legende));
+      remplir('liste-instructions', instructions, (n) => `Donnée le ${formaterDate(n.dateCreation)}`);
+      document.getElementById('carte-instructions').classList.toggle('hidden', nbInstructions === 0);
+
+      remplir('liste-notes-utilisees', utilisees, (n) => {
+        const chapitre = chapitreParId[n.chapitreId];
+        const ou = chapitre ? `Chapitre ${chapitre.numero} — ${chapitre.titre}` : 'Dans un chapitre';
+        return n.estInstruction() ? `Instruction · ${ou}` : ou;
       });
       document.getElementById('carte-notes-utilisees').classList.toggle('hidden', utilisees.length === 0);
+
+      // Un chapitre ne s'écrit qu'à partir de souvenirs : des instructions seules ne suffisent pas.
+      btnSynthetiser.disabled = nbSouvenirs === 0;
+      btnSynthetiser.textContent = nbSouvenirs
+        ? `✨ Synthétiser en chapitre (${pluriel(nbSouvenirs, 'souvenir')}${nbInstructions ? `, ${pluriel(nbInstructions, 'instruction')}` : ''})`
+        : '✨ Synthétiser en chapitre';
     }
 
     // ── Synthèse IA
     btnSynthetiser.addEventListener('click', async () => {
-      if (!confirm("L'IA va écrire un nouveau chapitre de tes mémoires à partir de tes notes. On y va ?")) return;
+      const ensuite = parametres.supprimerNotesApresSynthese
+        ? 'Ensuite, ces notes seront supprimées.'
+        : 'Ensuite, ces notes seront rangées dans « Déjà dans mes mémoires ».';
+      if (!confirm(`L'IA va écrire un nouveau chapitre de tes mémoires à partir de ${pluriel(nbSouvenirs, 'souvenir')}. ${ensuite} On y va ?`)) return;
       LectureVocaleService.arreter();
       btnSynthetiser.disabled = true;
       btnSynthetiser.textContent = "✍️ L'IA écrit ton chapitre…";
@@ -263,23 +294,9 @@
       }
     });
 
-    // ── Réglage
-    paramSupprimer.addEventListener('change', async () => {
-      try {
-        await MemoiresService.enregistrerParametres(foyerIdCourant, { supprimerNotesApresSynthese: paramSupprimer.checked });
-        afficherMsg('msg-param', paramSupprimer.checked
-          ? 'Tes notes seront supprimées une fois le chapitre écrit.'
-          : 'Tes notes seront gardées après chaque chapitre.');
-      } catch (err) {
-        paramSupprimer.checked = !paramSupprimer.checked;
-        afficherMsg('msg-param', err.message || "Le réglage n'a pas pu être enregistré.", true);
-      }
-    });
-
     const session = await ouvrirSession({ module: 'memoires' });
     foyerIdCourant = session.foyer.id;
-    const parametres = await MemoiresService.obtenirParametres(foyerIdCourant);
-    paramSupprimer.checked = parametres.supprimerNotesApresSynthese;
+    parametres = await MemoiresService.obtenirParametres(foyerIdCourant);
     await chargerNotes();
   </script>
 
