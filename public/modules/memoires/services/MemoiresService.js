@@ -13,8 +13,9 @@ export const MemoiresService = {
     return notes.map((n) => new NoteMemoire(n));
   },
 
-  async ajouterNote(foyerId, texte) {
-    const { id } = await ApiClient.post(`${base(foyerId)}/notes`, { texte });
+  // type : 'souvenir' (matière du chapitre) ou 'instruction' (consigne pour l'écrire).
+  async ajouterNote(foyerId, texte, type = 'souvenir') {
+    const { id } = await ApiClient.post(`${base(foyerId)}/notes`, { texte, type });
     return id;
   },
 
@@ -39,8 +40,9 @@ export const MemoiresService = {
     return ApiClient.put(`${base(foyerId)}/parametres`, parametres);
   },
 
-  // Écrit un nouveau chapitre à partir des notes pas encore synthétisées (IA, côté backend).
-  // Retourne { chapitre, numero, notesSupprimees, notesRestantes }.
+  // Écrit un nouveau chapitre à partir des souvenirs pas encore utilisés, dans le style des
+  // paramètres et selon les instructions en attente (IA, côté backend).
+  // Retourne { chapitre, numero, notesSupprimees, souvenirsRestants }.
   async synthetiser(foyerId) {
     const resultat = await ApiClient.post(`${base(foyerId)}/synthetiser`);
     return { ...resultat, chapitre: new ChapitreMemoire(resultat.chapitre) };

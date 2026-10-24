@@ -30,6 +30,9 @@
       <div id="liste-membres"></div>
     </div>
 
+    <!-- Réglages des modules ouverts à l'utilisateur : une carte par module (nom, puis réglages). -->
+    <div id="parametres-modules"></div>
+
     <div id="zone-onboarding" class="hidden">
       <div class="carte">
         <p class="carte-titre">Créer un foyer</p>
@@ -194,11 +197,43 @@
       }
     });
 
+    // Point d'extension `parametres` (voir coeur/utils/Modules.js) : chaque module ouvert à
+    // l'utilisateur qui déclare des réglages les construit lui-même sous son nom ; un module fermé
+    // n'affiche rien (et ses routes le refuseraient de toute façon côté backend).
+    async function afficherParametresModules(session) {
+      const conteneur = document.getElementById('parametres-modules');
+      const modules = MODULES.filter((m) => m.parametres && session.modules.includes(m.id));
+      for (const module of modules) {
+        const carte = document.createElement('div');
+        carte.className = 'carte';
+        carte.id = `parametres-${module.id}`;
+        const titre = document.createElement('p');
+        titre.className = 'carte-titre';
+        titre.textContent = `${module.icone} ${module.libelle}`;
+        const corps = document.createElement('div');
+        carte.append(titre, corps);
+        conteneur.appendChild(carte);
+        try {
+          const { afficherParametres } = await import(`./modules/${module.id}/parametres.js`);
+          await afficherParametres(corps, session);
+        } catch {
+          corps.innerHTML = '<p class="msg msg-erreur">Réglages indisponibles pour le moment.</p>';
+        }
+      }
+      // Lien direct depuis un module (ex. settings.html#parametres-memoires).
+      const cible = window.location.hash && document.getElementById(window.location.hash.slice(1));
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     // foyerRequis: false — cette page est aussi celle où l'on crée ou rejoint un foyer.
     const session = await ouvrirSession({ foyerRequis: false });
     utilisateurCourant = session.utilisateur;
-    if (session.foyer) ecouterFoyer(session.foyer.id);
-    else afficherOnboarding();
+    if (session.foyer) {
+      ecouterFoyer(session.foyer.id);
+      afficherParametresModules(session);
+    } else {
+      afficherOnboarding();
+    }
   </script>
 
 </body>

@@ -86,7 +86,7 @@
       btnSupprimer.className = 'btn-danger';
       btnSupprimer.textContent = '🗑️ Supprimer ce chapitre';
       btnSupprimer.addEventListener('click', async () => {
-        if (!confirm('Supprimer ce chapitre ? Les notes que tu as gardées pourront servir à en écrire un nouveau.')) return;
+        if (!confirm('Supprimer ce chapitre ? Si les notes qui ont servi à l\'écrire ont été conservées, elles reviendront dans Memory pour en écrire un nouveau.')) return;
         LectureVocaleService.arreter();
         await MemoiresService.supprimerChapitre(foyerIdCourant, chapitre.id);
         await chargerChapitres();
