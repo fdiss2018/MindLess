@@ -28,8 +28,8 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { UtilisateurService } from './coeur/services/UtilisateurService.js';
 
     const btnGoogle = document.getElementById('btn-google');
     const msgGoogle = document.getElementById('msg-google');
@@ -40,7 +40,7 @@
       try {
         const user = await AuthService.seConnecterAvecGoogle();
         const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-        window.location.href = utilisateur.foyerId ? 'index.html' : 'foyer.html';
+        window.location.href = utilisateur.foyerId ? 'index.html' : 'settings.html';
       } catch (err) {
         if (err.code !== 'auth/popup-closed-by-user') {
           msgGoogle.textContent = err.message || 'Une erreur est survenue.';
@@ -55,7 +55,7 @@
     AuthService.ecouterAuth(async (user) => {
       if (!user) return;
       const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      window.location.href = utilisateur.foyerId ? 'index.html' : 'foyer.html';
+      window.location.href = utilisateur.foyerId ? 'index.html' : 'settings.html';
     });
   </script>
 

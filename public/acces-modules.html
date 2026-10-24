@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Accès aux modules</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>👥 Accès aux modules</h1>
+    <p>Choisis, pour chaque membre, les modules qu'il voit. Settings reste visible pour tous.</p>
+  </header>
+
+  <main>
+    <a href="admin.html" class="lien-retour">← Retour</a>
+
+    <div id="liste-membres"></div>
+    <p id="msg" class="msg hidden"></p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { FoyerService } from './coeur/services/FoyerService.js';
+    import { MODULES } from './coeur/utils/Modules.js';
+
+    const listeMembres = document.getElementById('liste-membres');
+    const msg = document.getElementById('msg');
+
+    function afficherMsg(texte, erreur = false) {
+      msg.textContent = texte;
+      msg.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msg.classList.remove('hidden');
+    }
+
+    // Une carte par membre, une case par module. Chaque changement est enregistré immédiatement
+    // (liste complète des cases cochées du membre) ; en cas d'échec la case est remise en l'état.
+    // L'administrateur a toujours accès à tout : ses cases sont cochées et désactivées.
+    function creerCarteMembre(foyerId, membre) {
+      const carte = document.createElement('div');
+      carte.className = 'carte';
+
+      const titre = document.createElement('p');
+      titre.className = 'carte-titre';
+      titre.textContent = membre.nomAffiche || 'Membre sans nom';
+      carte.appendChild(titre);
+
+      if (membre.estAdministrateur) {
+        const desc = document.createElement('p');
+        desc.className = 'carte-desc';
+        desc.textContent = 'Administrateur : accès à tous les modules.';
+        carte.appendChild(desc);
+      }
+
+      const cases = MODULES.map((module) => {
+        const ligne = document.createElement('label');
+        ligne.className = 'ligne-acces';
+        const caseACocher = document.createElement('input');
+        caseACocher.type = 'checkbox';
+        caseACocher.value = module.id;
+        caseACocher.checked = membre.modules.includes(module.id);
+        caseACocher.disabled = membre.estAdministrateur;
+        ligne.append(caseACocher, ` ${module.icone} ${module.libelle}`);
+        carte.appendChild(ligne);
+        return caseACocher;
+      });
+
+      cases.forEach((caseACocher) => caseACocher.addEventListener('change', async () => {
+        const modules = cases.filter((c) => c.checked).map((c) => c.value);
+        cases.forEach((c) => { c.disabled = true; });
+        try {
+          await FoyerService.definirModulesMembre(foyerId, membre.uid, modules);
+          afficherMsg(`Accès de ${membre.nomAffiche || 'ce membre'} enregistrés.`);
+        } catch (err) {
+          caseACocher.checked = !caseACocher.checked;
+          afficherMsg(err.message || "L'enregistrement a échoué.", true);
+        } finally {
+          cases.forEach((c) => { c.disabled = false; });
+        }
+      }));
+
+      return carte;
+    }
+
+    const session = await ouvrirSession({ administrateur: true });
+    const membres = await FoyerService.listerMembres(session.foyer.id);
+    document.getElementById('chargement').classList.add('hidden');
+    membres.forEach((membre) => listeMembres.appendChild(creerCarteMembre(session.foyer.id, membre)));
+  </script>
+
+</body>
+</html>

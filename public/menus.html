@@ -61,14 +61,14 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { RecetteService } from './menus/services/RecetteService.js';
-    import { PlanningRepasService } from './menus/services/PlanningRepasService.js';
-    import { NutritionService } from './menus/services/NutritionService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { RecetteService } from './modules/menus/services/RecetteService.js';
+    import { PlanningRepasService } from './modules/menus/services/PlanningRepasService.js';
+    import { NutritionService } from './modules/menus/services/NutritionService.js';
+    import { CRENEAUX_REPAS } from './modules/menus/models/PlanningRepas.js';
     import {
-      JOURS_SEMAINE, CRENEAUX_REPAS, getIdSemaine, getDatesSemaine, semaineSuivante, semainePrecedente,
-    } from './menus/utils/DateSemaine.js';
+      JOURS_SEMAINE, getIdSemaine, getDatesSemaine, semaineSuivante, semainePrecedente,
+    } from './coeur/utils/DateSemaine.js';
 
     const LABEL_JOUR = {
       lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi', jeudi: 'Jeudi',
@@ -224,19 +224,15 @@
       ecouterSemaineCourante();
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
+    const session = await ouvrirSession({ module: 'menus' });
+    foyerIdCourant = session.foyer.id;
 
-      const recettes = await RecetteService.listerRecettes(foyerIdCourant);
-      recettesParId = Object.fromEntries(recettes.map(r => [r.id, r]));
-      selectRecette.innerHTML = '<option value="">— Choisir une recette —</option>'
-        + recettes.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
+    const recettes = await RecetteService.listerRecettes(foyerIdCourant);
+    recettesParId = Object.fromEntries(recettes.map(r => [r.id, r]));
+    selectRecette.innerHTML = '<option value="">— Choisir une recette —</option>'
+      + recettes.map(r => `<option value="${r.id}">${r.nom}</option>`).join('');
 
-      ecouterSemaineCourante();
-    });
+    ecouterSemaineCourante();
   </script>
 
 </body>

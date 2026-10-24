@@ -34,11 +34,10 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { VehiculeService } from './voiture/services/VehiculeService.js';
-    import { EntretienService } from './voiture/services/EntretienService.js';
-    import { calculerRappels } from './voiture/utils/RappelsEntretien.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { VehiculeService } from './modules/voiture/services/VehiculeService.js';
+    import { EntretienService } from './modules/voiture/services/EntretienService.js';
+    import { calculerRappels } from './modules/voiture/utils/RappelsEntretien.js';
 
     const params = new URLSearchParams(window.location.search);
     const vehiculeId = params.get('id');
@@ -108,23 +107,22 @@
       });
     }
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-
-      const vehicule = await VehiculeService.obtenirVehicule(utilisateur.foyerId, vehiculeId);
+    async function afficherVehicule(foyerId) {
+      const vehicule = await VehiculeService.obtenirVehicule(foyerId, vehiculeId);
       if (!vehicule) { window.location.href = 'voiture.html'; return; }
 
       document.getElementById('titre').textContent = `🚗 ${vehicule.nom}`;
       document.getElementById('sous-titre').textContent =
         `${vehicule.marque} ${vehicule.modele} · ${vehicule.kilometrageActuel.toLocaleString('fr-FR')} km`;
 
-      const entretiens = await EntretienService.listerEntretiens(utilisateur.foyerId, vehiculeId);
+      const entretiens = await EntretienService.listerEntretiens(foyerId, vehiculeId);
       chargement.classList.add('hidden');
       afficherRappels(vehicule, entretiens);
       afficherEntretiens(entretiens);
-    });
+    }
+
+    const session = await ouvrirSession({ module: 'voiture' });
+    await afficherVehicule(session.foyer.id);
   </script>
 
 </body>

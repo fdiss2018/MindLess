@@ -32,20 +32,15 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { RecetteService } from './menus/services/RecetteService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { RecetteService } from './modules/menus/services/RecetteService.js';
 
     const params = new URLSearchParams(window.location.search);
     const recetteId = params.get('id');
     document.getElementById('lien-modifier').href = `recette-form.html?id=${recetteId}`;
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-
-      const recette = await RecetteService.obtenirRecette(utilisateur.foyerId, recetteId);
+    async function afficherRecette(foyerId) {
+      const recette = await RecetteService.obtenirRecette(foyerId, recetteId);
       document.getElementById('chargement').classList.add('hidden');
       if (!recette) { window.location.href = 'recettes.html'; return; }
 
@@ -66,7 +61,10 @@
         `;
         liste.appendChild(div);
       });
-    });
+    }
+
+    const session = await ouvrirSession({ module: 'menus' });
+    await afficherRecette(session.foyer.id);
   </script>
 
 </body>

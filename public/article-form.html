@@ -41,11 +41,11 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { ArticleService } from './veille/services/ArticleService.js';
-    import { Article } from './veille/models/Article.js';
-    import { CATEGORIES } from './veille/utils/Categories.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { ArticleService } from './modules/veille/services/ArticleService.js';
+    import { Article } from './modules/veille/models/Article.js';
+    import { CATEGORIES } from './modules/veille/utils/Categories.js';
 
     const params = new URLSearchParams(window.location.search);
     const articleId = params.get('id');
@@ -125,13 +125,9 @@
       window.location.href = 'veille.html';
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
-      if (articleId) await chargerArticle();
-    });
+    const session = await ouvrirSession({ module: 'veille' });
+    foyerIdCourant = session.foyer.id;
+    if (articleId) await chargerArticle();
   </script>
 
 </body>
