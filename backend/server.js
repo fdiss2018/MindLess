@@ -1,19 +1,16 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { authentifier } from './src/commun/middleware/auth.js';
-import { whoamiRouter } from './src/commun/routes/whoami.js';
-import { utilisateursRouter } from './src/commun/routes/utilisateurs.js';
-import { foyersRouter } from './src/commun/routes/foyers.js';
-import { vehiculesRouter } from './src/voiture/routes/vehicules.js';
-import { entretiensRouter } from './src/voiture/routes/entretiens.js';
-import { recettesRouter } from './src/menus/routes/recettes.js';
-import { planningRouter } from './src/menus/routes/planning.js';
-import { listeCoursesRouter } from './src/menus/routes/listeCourses.js';
-import { nutritionRouter } from './src/menus/routes/nutrition.js';
-import { articlesRouter } from './src/veille/routes/articles.js';
-import { articlesPublicsRouter } from './src/veille/routes/articlesPublics.js';
-import { lignesEditorialesRouter } from './src/veille/routes/lignesEditoriales.js';
+import { authentifier } from './src/coeur/middleware/auth.js';
+import { monterModule } from './src/coeur/monterModule.js';
+import { whoamiRouter } from './src/coeur/routes/whoami.js';
+import { sessionRouter } from './src/coeur/routes/session.js';
+import { utilisateursRouter } from './src/coeur/routes/utilisateurs.js';
+import { foyersRouter } from './src/coeur/routes/foyers.js';
+import { moduleVoiture } from './src/modules/voiture/module.js';
+import { moduleCourses } from './src/modules/courses/module.js';
+import { moduleMenus } from './src/modules/menus/module.js';
+import { moduleVeille } from './src/modules/veille/module.js';
 
 const app = express();
 
@@ -31,20 +28,19 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use('/api', authentifier, whoamiRouter);
-app.use('/api/utilisateurs', authentifier, utilisateursRouter);
-app.use('/api/foyers', authentifier, foyersRouter);
-app.use('/api/foyers/:foyerId/vehicules', authentifier, vehiculesRouter);
-app.use('/api/foyers/:foyerId/vehicules/:vehiculeId/entretiens', authentifier, entretiensRouter);
-app.use('/api/foyers/:foyerId/recettes', authentifier, recettesRouter);
-app.use('/api/foyers/:foyerId/planning', authentifier, planningRouter);
-app.use('/api/foyers/:foyerId/liste-courses', authentifier, listeCoursesRouter);
-app.use('/api/foyers/:foyerId/nutrition', authentifier, nutritionRouter);
-app.use('/api/foyers/:foyerId/articles', authentifier, articlesRouter);
-// Volontairement sans `authentifier` : route publique par choix explicite de l'utilisateur, voir
-// articlesPublics.js et CLAUDE.md ("Limite assumée").
-app.use('/api/public/foyers/:foyerId/articles', articlesPublicsRouter);
-app.use('/api/foyers/:foyerId/lignes-editoriales', authentifier, lignesEditorialesRouter);
+// Résout l'appelant une seule fois pour tout /api (ne bloque jamais sans token, voir auth.js) —
+// chaque route impose ensuite ce dont elle a besoin (requireUid, requireMembreFoyer...).
+app.use('/api', authentifier);
+
+// Cœur : identité, session, foyer, droits d'accès aux modules.
+app.use('/api', whoamiRouter);
+app.use('/api', sessionRouter);
+app.use('/api/utilisateurs', utilisateursRouter);
+app.use('/api/foyers', foyersRouter);
+
+// Modules fonctionnels : chacun décrit ses routes dans son manifeste, le cœur les monte derrière
+// le contrôle d'accès au module (voir coeur/monterModule.js). Ajouter un module = une ligne ici.
+[moduleVoiture, moduleCourses, moduleMenus, moduleVeille].forEach((module) => monterModule(app, module));
 
 app.use((err, req, res, next) => {
   console.error(err);

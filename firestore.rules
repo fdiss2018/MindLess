@@ -10,12 +10,21 @@ service cloud.firestore {
           get(/databases/$(database)/documents/foyers/$(foyerId)).data.membres;
     }
 
+    // Traduction de backend/src/coeur/domain/AccesModules.js (seule source de vérité des droits) :
+    // membre du foyer, et administrateur (créateur) ou module listé dans modulesParMembre[uid].
+    function aAccesModule(foyerId, module) {
+      let foyer = get(/databases/$(database)/documents/foyers/$(foyerId)).data;
+      return request.auth != null &&
+        request.auth.uid in foyer.membres &&
+        (request.auth.uid == foyer.creePar ||
+          module in foyer.get('modulesParMembre', {}).get(request.auth.uid, []));
+    }
+
     // Toutes les écritures passent désormais par le backend (SDK Admin, qui
     // contourne ces règles) — le client n'a plus qu'un accès en lecture, et
     // uniquement là où le temps réel (onSnapshot) est encore utilisé côté
-    // front : foyer, planning repas, liste de courses. Voir CLAUDE.md /
-    // backend/README pour le détail des endpoints qui remplacent les écritures
-    // directes.
+    // front : foyer (cœur), planning repas (module menus), liste de courses
+    // (module courses). Voir CLAUDE.md pour le détail.
 
     match /utilisateurs/{uid} {
       allow read, write: if false;
@@ -26,12 +35,12 @@ service cloud.firestore {
       allow write: if false;
 
       match /planningRepas/{document=**} {
-        allow read: if estMembreDuFoyer(foyerId);
+        allow read: if aAccesModule(foyerId, 'menus');
         allow write: if false;
       }
 
       match /listeCourses/{document=**} {
-        allow read: if estMembreDuFoyer(foyerId);
+        allow read: if aAccesModule(foyerId, 'courses');
         allow write: if false;
       }
 
@@ -40,6 +49,10 @@ service cloud.firestore {
       }
 
       match /recettes/{document=**} {
+        allow read, write: if false;
+      }
+
+      match /profilsNutritionnels/{document=**} {
         allow read, write: if false;
       }
 

@@ -33,11 +33,10 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { ListeCoursesService } from './menus/services/ListeCoursesService.js';
-    import { ListeCoursesItem } from './menus/models/ListeCoursesItem.js';
-    import { getIdSemaine } from './menus/utils/DateSemaine.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { ListeCoursesService } from './modules/courses/services/ListeCoursesService.js';
+    import { ListeCoursesItem } from './modules/courses/models/ListeCoursesItem.js';
+    import { getIdSemaine } from './coeur/utils/DateSemaine.js';
 
     let foyerIdCourant = null;
 
@@ -121,15 +120,11 @@
       }
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
+    const session = await ouvrirSession({ module: 'courses' });
+    foyerIdCourant = session.foyer.id;
 
-      ListeCoursesService.ecouterListe(foyerIdCourant, (items) => {
-        afficherListe(items);
-      });
+    ListeCoursesService.ecouterListe(foyerIdCourant, (items) => {
+      afficherListe(items);
     });
   </script>
 

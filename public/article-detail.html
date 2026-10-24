@@ -41,11 +41,10 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { ArticleService } from './veille/services/ArticleService.js';
-    import { LectureVocaleService } from './veille/services/LectureVocaleService.js';
-    import { CATEGORIES } from './veille/utils/Categories.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { ArticleService } from './modules/veille/services/ArticleService.js';
+    import { LectureVocaleService } from './modules/veille/services/LectureVocaleService.js';
+    import { CATEGORIES } from './modules/veille/utils/Categories.js';
 
     const params = new URLSearchParams(window.location.search);
     const articleId = params.get('id');
@@ -73,12 +72,8 @@
       enLecture = true;
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-
-      const article = await ArticleService.obtenirArticle(utilisateur.foyerId, articleId);
+    async function afficherArticle(foyerId) {
+      const article = await ArticleService.obtenirArticle(foyerId, articleId);
       document.getElementById('chargement').classList.add('hidden');
       if (!article) { window.location.href = 'veille.html'; return; }
       articleCourant = article;
@@ -121,7 +116,7 @@
       // "Voir aussi" : renvoi déterministe vers les autres articles déjà publiés dans la même
       // catégorie (pas de lien choisi par l'IA, qui ne peut que citer un titre en prose dans le
       // contenu généré — voir CLAUDE.md section "veille" / continuité éditoriale).
-      const autresArticles = (await ArticleService.listerArticles(utilisateur.foyerId))
+      const autresArticles = (await ArticleService.listerArticles(foyerId))
         .filter((a) => a.categorie === article.categorie && a.id !== article.id)
         .slice(0, 5);
 
@@ -135,7 +130,10 @@
         `).join('');
         document.getElementById('carte-voir-aussi').classList.remove('hidden');
       }
-    });
+    }
+
+    const session = await ouvrirSession({ module: 'veille' });
+    await afficherArticle(session.foyer.id);
   </script>
 
 </body>

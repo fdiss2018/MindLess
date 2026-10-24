@@ -83,11 +83,9 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { FoyerService } from './commun/services/FoyerService.js';
-    import { ArticleService } from './veille/services/ArticleService.js';
-    import { CATEGORIES } from './veille/utils/Categories.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { ArticleService } from './modules/veille/services/ArticleService.js';
+    import { CATEGORIES } from './modules/veille/utils/Categories.js';
 
     const liste = document.getElementById('liste-articles');
     const vide = document.getElementById('vide');
@@ -243,20 +241,10 @@
       }
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
-      await chargerEtAfficher();
-
-      const desabonnerFoyer = FoyerService.ecouterFoyer(foyerIdCourant, (foyer) => {
-        desabonnerFoyer();
-        if (foyer && foyer.creePar === utilisateur.id) {
-          document.getElementById('lien-parametres').classList.remove('hidden');
-        }
-      });
-    });
+    const session = await ouvrirSession({ module: 'veille' });
+    foyerIdCourant = session.foyer.id;
+    if (session.estAdministrateur) document.getElementById('lien-parametres').classList.remove('hidden');
+    await chargerEtAfficher();
   </script>
 
 </body>

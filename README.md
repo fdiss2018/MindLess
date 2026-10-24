@@ -119,16 +119,44 @@ ci-dessous).
 
 ### Tester le backend seul, sans navigateur (Postman/curl)
 
-Le middleware `commun/middleware/auth.js` accepte, en plus d'un vrai ID token Firebase, le secret
+Le middleware `coeur/middleware/auth.js` accepte, en plus d'un vrai ID token Firebase, le secret
 `STATIC_API_TOKEN` défini dans `backend/.env` — pratique pour tester une route sans repasser par un
 login Google à chaque fois. Ajoute `X-Test-Uid` pour te placer dans le contexte d'un utilisateur
 donné :
 
 ```bash
-curl http://localhost:3000/api/utilisateurs/moi \
+curl http://localhost:3000/api/session \
   -H "Authorization: Bearer <STATIC_API_TOKEN>" \
   -H "X-Test-Uid: uid-de-test"
 ```
+
+`GET /api/session` renvoie l'utilisateur, son foyer et les modules qui lui sont ouverts
+(`modules`) — pratique pour vérifier les droits d'un membre. Une route de module appelée par un
+membre à qui ce module n'est pas ouvert répond **403**, y compris avec `STATIC_API_TOKEN` : le
+contrôle d'accès est posé par le cœur sur toutes les routes de module (voir CLAUDE.md, "Cœur et
+modules"). L'administrateur (créateur du foyer) a toujours accès à tout.
+
+### Droits d'accès aux modules
+
+L'administrateur gère les modules de chaque membre depuis l'app (Admin → Accès aux modules), ou
+directement :
+
+```bash
+curl -X PUT http://localhost:3000/api/foyers/<FOYER_ID>/membres/<UID_DU_MEMBRE>/modules \
+  -H "Authorization: Bearer <STATIC_API_TOKEN>" \
+  -H "X-Test-Uid: <UID_ADMINISTRATEUR>" \
+  -H "Content-Type: application/json" \
+  -d '{"modules": ["courses", "menus"]}'
+```
+
+Identifiants valides : `voiture`, `courses`, `menus`, `veille` (catalogue :
+`backend/src/coeur/domain/AccesModules.js`) — un identifiant inconnu est ignoré. Réponse
+`200 { uid, modules }` ; `403` si l'appelant n'est pas l'administrateur, `400` pour modifier les
+droits de l'administrateur lui-même (il a toujours tout), `404` si l'uid n'est pas membre du foyer.
+
+⚠️ **Refus par défaut** : un membre sans entrée dans `foyer.modulesParMembre` n'a accès à aucun
+module. Au premier déploiement de cette fonctionnalité, les membres existants (hors administrateur)
+ne voient donc plus que Settings tant que l'administrateur ne leur a pas rouvert leurs modules.
 
 ### API externe (veille) — ajouter un article depuis un script
 
@@ -153,7 +181,7 @@ curl -X POST http://localhost:3000/api/foyers/<FOYER_ID>/articles/externe \
 
 Réponse `201 { "id": "..." }` ; `400` si `titre`/`categorie`/`contenu` invalides, `403` si
 `X-Test-Uid` n'est pas le créateur du foyer, `404` si `:foyerId` n'existe pas. Catégories valides :
-voir `backend/src/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
+voir `backend/src/modules/veille/domain/Categories.js` (`politique`, `marseille`, `culture`,
 `sortir_marseille`, `ecologie`, `ia`, `economie_finances`, `societe`, `international`,
 `economie_entreprises`, `actualite_locale`, `mails`).
 

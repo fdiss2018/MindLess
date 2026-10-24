@@ -47,10 +47,10 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { VehiculeService } from './voiture/services/VehiculeService.js';
-    import { Vehicule } from './voiture/models/Vehicule.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { VehiculeService } from './modules/voiture/services/VehiculeService.js';
+    import { Vehicule } from './modules/voiture/models/Vehicule.js';
 
     const params = new URLSearchParams(window.location.search);
     const vehiculeId = params.get('id');
@@ -118,13 +118,9 @@
       window.location.href = 'voiture.html';
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
-      if (vehiculeId) await chargerVehicule();
-    });
+    const session = await ouvrirSession({ module: 'voiture' });
+    foyerIdCourant = session.foyer.id;
+    if (vehiculeId) await chargerVehicule();
   </script>
 
 </body>

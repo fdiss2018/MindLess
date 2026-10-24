@@ -14,7 +14,7 @@ l'API externe déjà en place (`POST /api/foyers/:foyerId/articles/externe`).
 3. Copie `config.example.json` en `config.json` (à côté de ce script — jamais committé, voir
    `.gitignore`) et renseigne :
    - `apiBaseUrl` : l'URL du backend (déjà pré-remplie pour la prod).
-   - `foyerId` : le code de ton foyer (visible sur `foyer.html`).
+   - `foyerId` : le code de ton foyer (visible sur `settings.html`).
    - `staticApiToken` : le secret de prod — `gcloud secrets versions access latest
      --secret=STATIC_API_TOKEN --project=mindless-c58d3` (voir README.md racine, section
      "API externe (veille)").

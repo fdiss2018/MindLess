@@ -15,27 +15,12 @@
   </header>
 
   <main>
-    <div class="nav-accueil">
-      <a href="voiture.html" class="nav-tuile">
-        <span class="icone">🚗</span>
-        <span class="titre">Voiture</span>
-        <span class="tuile-badge hidden" id="badge-voiture"></span>
-      </a>
-      <a href="courses.html" class="nav-tuile">
-        <span class="icone">🛒</span>
-        <span class="titre">Courses</span>
-      </a>
-      <a href="menus.html" class="nav-tuile">
-        <span class="icone">🍽️</span>
-        <span class="titre">Menus</span>
-      </a>
-      <a href="veille.html" class="nav-tuile">
-        <span class="icone">🗞️</span>
-        <span class="titre">Veille</span>
-      </a>
-      <a href="foyer.html" class="nav-tuile">
-        <span class="icone">🏠</span>
-        <span class="titre">Mon foyer</span>
+    <!-- Tuiles des modules ouverts à l'utilisateur (insérées ici depuis coeur/utils/Modules.js),
+         suivies des tuiles du cœur, toujours présentes. -->
+    <div class="nav-accueil" id="nav-accueil">
+      <a href="settings.html" class="nav-tuile">
+        <span class="icone">⚙️</span>
+        <span class="titre">Settings</span>
       </a>
       <a href="admin.html" class="nav-tuile hidden" id="tuile-admin">
         <span class="icone">🛠️</span>
@@ -43,52 +28,63 @@
       </a>
     </div>
 
+    <p id="aucun-module" class="vide hidden">
+      Aucun module ne t'est encore ouvert. L'administrateur du foyer peut t'en donner l'accès depuis
+      sa page Admin.
+    </p>
+
     <p style="text-align:center">
       <a href="#" id="btn-deconnexion">Se déconnecter</a>
     </p>
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { FoyerService } from './commun/services/FoyerService.js';
-    import { VehiculeService } from './voiture/services/VehiculeService.js';
-    import { EntretienService } from './voiture/services/EntretienService.js';
-    import { calculerRappels } from './voiture/utils/RappelsEntretien.js';
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { MODULES } from './coeur/utils/Modules.js';
 
     document.getElementById('btn-deconnexion').addEventListener('click', async (e) => {
       e.preventDefault();
       await AuthService.seDeconnecter();
     });
 
-    async function afficherBadgeRappels(foyerId) {
-      const vehicules = await VehiculeService.listerVehicules(foyerId);
-      let total = 0;
-      for (const vehicule of vehicules) {
-        const entretiens = await EntretienService.listerEntretiens(foyerId, vehicule.id);
-        const rappels = calculerRappels(vehicule, entretiens, new Date());
-        total += rappels.filter(r => r.statut === 'du' || r.statut === 'proche').length;
-      }
-      const badge = document.getElementById('badge-voiture');
+    function creerTuile(module) {
+      const tuile = document.createElement('a');
+      tuile.href = module.page;
+      tuile.className = 'nav-tuile';
+      tuile.innerHTML = `
+        <span class="icone">${module.icone}</span>
+        <span class="titre">${module.libelle}</span>
+        <span class="tuile-badge hidden"></span>
+      `;
+      return tuile;
+    }
+
+    // Point d'extension `badgeAccueil` : le code du module n'est chargé que s'il est ouvert à
+    // l'utilisateur. Un échec n'empêche jamais l'affichage de l'accueil.
+    async function afficherBadge(module, tuile, foyerId) {
+      const { calculerBadge } = await import(`./modules/${module.id}/accueil.js`);
+      const total = await calculerBadge(foyerId);
       if (total > 0) {
+        const badge = tuile.querySelector('.tuile-badge');
         badge.textContent = total;
         badge.classList.remove('hidden');
       }
     }
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      afficherBadgeRappels(utilisateur.foyerId).catch(() => {});
+    const session = await ouvrirSession();
+    const nav = document.getElementById('nav-accueil');
+    const premiereTuileCoeur = nav.firstElementChild;
+    const modulesOuverts = MODULES.filter((m) => session.modules.includes(m.id));
 
-      const desabonnerFoyer = FoyerService.ecouterFoyer(utilisateur.foyerId, (foyer) => {
-        desabonnerFoyer();
-        if (foyer && foyer.creePar === utilisateur.id) {
-          document.getElementById('tuile-admin').classList.remove('hidden');
-        }
-      });
+    modulesOuverts.forEach((module) => {
+      const tuile = creerTuile(module);
+      nav.insertBefore(tuile, premiereTuileCoeur);
+      if (module.badgeAccueil) afficherBadge(module, tuile, session.foyer.id).catch(() => {});
     });
+
+    document.getElementById('aucun-module').classList.toggle('hidden', modulesOuverts.length > 0);
+    if (session.estAdministrateur) document.getElementById('tuile-admin').classList.remove('hidden');
   </script>
 
 </body>

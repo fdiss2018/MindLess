@@ -39,66 +39,174 @@ règles, c'est lui le seul écrivain.
 Trois services front gardent une **lecture temps réel directe** sur Firestore (`onSnapshot`), en
 plus de leurs appels à `ApiClient` pour les écritures — mode hybride nécessaire pour que les
 changements d'un membre du foyer apparaissent instantanément chez les autres, sans polling :
-`FoyerService.ecouterFoyer`, `PlanningRepasService.ecouterSemaine`, `ListeCoursesService.ecouterListe`.
+`FoyerService.ecouterFoyer` (cœur), `PlanningRepasService.ecouterSemaine` (menus),
+`ListeCoursesService.ecouterListe` (courses).
 
-Le backend accepte deux formes d'authentification (voir `backend/src/commun/middleware/auth.js`) :
+Le backend accepte deux formes d'authentification (voir `backend/src/coeur/middleware/auth.js`) :
 un vrai ID token Firebase, ou le secret `STATIC_API_TOKEN` (+ en-tête `X-Test-Uid`) pour tester une
 route sans navigateur — voir README.md.
 
-## Modules fonctionnels
+## Cœur et modules
 
-Le code (front **et** back) est découpé par domaine métier plutôt que par couche technique.
-Chaque module regroupe, en miroir des deux côtés :
+MindLess est un **cœur** transverse (identité, foyer, session, droits d'accès, pages d'accueil /
+Settings / Admin) sur lequel se branchent des **modules** fonctionnels : `voiture`, `courses`,
+`menus`, `veille`. L'administrateur du foyer choisit, membre par membre, les modules que chacun
+voit — pour qu'un membre ne soit pas submergé de fonctionnalités qui ne le concernent pas. Le cœur,
+lui, est visible de tous.
 
-- **Backend** (`backend/src/<module>/`) : `domain/` (classes/fonctions pures), `repositories/`
-  (accès Firestore via le SDK Admin), `routes/` (Express, montées dans `server.js`)
-- **Frontend** (`public/<module>/`) : `services/` (appels `ApiClient`, seul point d'accès au
-  backend), `models/`, `utils/` le cas échéant (fonctions pures, testables, n'importent jamais
-  Firebase)
+Ce cloisonnement se lit directement dans l'arborescence, en miroir front/back :
+
+```
+backend/
+  server.js                       composition : routes du cœur + une ligne par module
+  src/coeur/                      identité, foyer, session, droits d'accès
+    domain/ middleware/ repositories/ routes/
+    monterModule.js               branche un module derrière le contrôle d'accès
+  src/modules/<id>/
+    module.js                     manifeste : { id, routes, routesPubliques? }
+    api.js                        (optionnel) API publique offerte aux autres modules
+    domain/ repositories/ routes/
+  tests/coeur/  tests/modules/<id>/
+public/
+  *.html                          pages à plat, cœur et modules (voir plus bas)
+  coeur/  services/ models/ utils/
+  modules/<id>/  services/ models/ utils/  accueil.js (optionnel)
+tests/coeur/  tests/modules/<id>/
+```
+
+À l'intérieur d'un module, même découpage qu'avant : **backend** `domain/` (classes/fonctions
+pures), `repositories/` (accès Firestore via le SDK Admin), `routes/` (Express) ; **frontend**
+`services/` (appels `ApiClient`, seul point d'accès au backend), `models/`, `utils/` (fonctions
+pures, testables, n'importent jamais Firebase).
 
 Les pages `.html` restent à la racine de `public/` (pas de sous-dossier par module) : sans
 bundler, ce sont de simples `<a href="...">` et chemins relatifs entre pages, les déplacer n'aurait
-aucun bénéfice et casserait tous les liens de navigation.
+aucun bénéfice et casserait tous les liens de navigation. Leur appartenance à un module est
+déclarée dans leur script, par `ouvrirSession({ module: '<id>' })` (voir plus bas).
 
-Modules actuels : `commun`, `voiture`, `menus`, `veille`. Un futur module (tâches, préparation
-vacances...)
-suit le même patron : créer `backend/src/<module>/` et `public/<module>/` avec la même structure
-interne, et monter ses routes dans `backend/server.js`.
+### Règles de dépendance
 
-### `commun` — utilisateur, foyer, authentification
+1. **Un module dépend du cœur, jamais l'inverse.** Le cœur ne connaît des modules que leurs
+   identifiants (catalogue `coeur/domain/AccesModules.js`) ; seuls les points de composition les
+   importent : `backend/server.js` (manifestes) et `index.html` (chargement dynamique de
+   `modules/<id>/accueil.js`, voir "Points d'extension").
+2. **Un module n'importe jamais le code interne d'un autre module.** Côté backend, une dépendance
+   entre modules passe uniquement par `modules/<fournisseur>/api.js`, qui expose des données
+   simples (jamais un repository ni une classe du domaine) — seul cas aujourd'hui : `courses` →
+   `menus/api.js` (`listerIngredientsSemaine`). Côté front, aucun import entre modules : une
+   fonction pure utile à plusieurs modules remonte dans `public/coeur/utils/` (ex. `DateSemaine.js`,
+   partagé par menus et courses).
+3. **Chaque module possède ses données** Firestore, sous `foyers/{foyerId}/...` ; le cœur ne stocke
+   rien de propre à un module (le profil nutritionnel a quitté `utilisateurs/{uid}` pour cette
+   raison, voir `menus`).
+4. **Un module ne pose jamais lui-même le contrôle d'accès** : le cœur l'applique au montage (backend)
+   et à l'ouverture de page (front).
 
-- **Backend** : `domain/{Utilisateur,Foyer,CodeInvitation}.js`, `middleware/{auth,requireUid,
-  requireMembreFoyer}.js`, `repositories/{UtilisateurRepository,FoyerRepository}.js`,
-  `routes/{whoami,utilisateurs,foyers}.js`
-- **Frontend** : `services/{AuthService,ApiClient,UtilisateurService,FoyerService}.js`,
-  `models/{Utilisateur,Foyer}.js`
+### Droits d'accès aux modules
+
+Source de vérité unique : `backend/src/coeur/domain/AccesModules.js` (fonctions pures, testées) —
+`IDS_MODULES` (catalogue), `estAdministrateur`, `modulesAccessibles`, `aAccesModule`,
+`normaliserModules`.
+
+- L'**administrateur** du foyer est son créateur (`foyer.creePar`) : il a toujours accès à tous les
+  modules, ses droits ne se modifient pas (il peut donc toujours rouvrir un module).
+- Tout autre membre n'a accès qu'aux modules listés dans `foyer.modulesParMembre[uid]` —
+  **refus par défaut** : un nouveau membre ne voit que le cœur (Settings) tant que l'administrateur
+  ne lui a rien ouvert. Un foyer antérieur à cette fonctionnalité (sans `modulesParMembre`) est donc
+  dans cet état pour ses membres non administrateurs.
+- L'administrateur les gère depuis Admin → **Accès aux modules** (`acces-modules.html`, une case
+  par membre et par module, enregistrement immédiat) → `PUT
+  /api/foyers/:foyerId/membres/:uid/modules` (`requireCreateurFoyer`).
+
+Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces mêmes règles :
+
+- **Backend** — `coeur/monterModule.js` monte chaque route déclarée dans un manifeste derrière
+  `requireUid` → `requireMembreFoyer` → `requireModule(id)` (403 sinon). Aucune route de module ne
+  peut être exposée sans ce contrôle ; `authentifier` est appliqué une seule fois pour tout `/api`
+  dans `server.js`.
+- **Front** — chaque page démarre par `ouvrirSession(...)` (`public/coeur/services/Session.js`), qui
+  lit `GET /api/session` (utilisateur, foyer, `estAdministrateur`, `modules` — calculés par le
+  backend, jamais recalculés côté front) et renvoie vers l'accueil une page de module non ouverte
+  (ou une page admin pour un non-administrateur). `index.html` n'affiche que les tuiles des modules
+  ouverts.
+- **`firestore.rules`** — `aAccesModule(foyerId, module)` traduit les mêmes règles pour les deux
+  lectures temps réel de modules (`planningRepas` → menus, `listeCourses` → courses).
+
+### Points d'extension du cœur
+
+- **Manifeste backend** `modules/<id>/module.js` : `{ id, routes: { '<chemin>': router },
+  routesPubliques?: {...} }`. `routes` est monté sur `/api/foyers/:foyerId/<chemin>` (routers en
+  `mergeParams: true`, `req.foyer` déjà posé), `routesPubliques` sur
+  `/api/public/foyers/:foyerId/<chemin>` **sans** authentification ni contrôle d'accès — réservé à
+  un choix explicite et documenté (seul cas : API publique de veille).
+- **Catalogue front** `public/coeur/utils/Modules.js` : libellé, icône et page d'entrée de chaque
+  module (les identifiants sont une copie assumée du catalogue backend). `badgeAccueil: true` →
+  le module fournit `modules/<id>/accueil.js` exportant `calculerBadge(foyerId)`, chargé
+  dynamiquement par `index.html` seulement si le module est ouvert (voiture : rappels d'entretien).
+- **Ouverture de page** `ouvrirSession({ module, administrateur, foyerRequis })` : `module` pour une
+  page de module, `administrateur: true` pour une page réservée à l'administrateur, `foyerRequis:
+  false` uniquement pour `settings.html` (création/jonction d'un foyer).
+
+### Ajouter un module
+
+1. Ajouter son identifiant à `IDS_MODULES` (`backend/src/coeur/domain/AccesModules.js`) et son
+   entrée de présentation dans `public/coeur/utils/Modules.js`.
+2. Backend : `backend/src/modules/<id>/{domain,repositories,routes}/` + `module.js`, puis une ligne
+   dans `backend/server.js` (`monterModule` refuse au démarrage un module absent du catalogue).
+   Routers en `Router({ mergeParams: true })`, sans middleware d'accès.
+3. Front : `public/modules/<id>/{services,models,utils}/` ; pages `<id>*.html` à la racine de
+   `public/`, chacune démarrant par `await ouvrirSession({ module: '<id>' })`.
+4. Données sous `foyers/{foyerId}/<collection>` ; dans `firestore.rules`, collection fermée
+   (`allow read, write: if false`) ou, si une lecture temps réel est indispensable,
+   `allow read: if aAccesModule(foyerId, '<id>')`.
+5. Besoin d'un autre module ? Passer par son `api.js` (le créer s'il n'existe pas), jamais par ses
+   fichiers internes.
+6. Tests de la logique pure dans `backend/tests/modules/<id>/` et `tests/modules/<id>/`.
+7. Documenter le module dans cette section de CLAUDE.md.
+
+### `coeur` — identité, foyer, session, droits d'accès
+
+- **Backend** : `domain/{Utilisateur,Foyer,CodeInvitation,AccesModules}.js`, `middleware/{auth,
+  requireUid,requireMembreFoyer,requireCreateurFoyer,requireModule}.js`,
+  `repositories/{UtilisateurRepository,FoyerRepository}.js`, `routes/{whoami,session,utilisateurs,
+  foyers}.js`, `monterModule.js`
+- **Frontend** : `services/{AuthService,ApiClient,Session,UtilisateurService,FoyerService}.js`,
+  `models/{Utilisateur,Foyer}.js`, `utils/{Modules,DateSemaine}.js`
+- **Pages** : `index.html` (accueil : tuiles des modules ouverts + Settings + Admin), `login.html`,
+  `settings.html` (ex-"Mon foyer", visible de tous : foyer, membres et leurs modules, code
+  d'invitation ; sert aussi à créer ou rejoindre un foyer), `admin.html`, `acces-modules.html`,
+  `404.html`
 
 `requireMembreFoyer` (middleware backend) est l'équivalent de `estMembreDuFoyer()` dans
 `firestore.rules` : il vérifie que `req.uid` figure dans `foyer.membres` avant de laisser passer une
 requête sur une sous-ressource du foyer, et pose `req.foyer` pour éviter une deuxième lecture aux
-routes qui en ont besoin (ex. `nutrition.js`).
+routes qui en ont besoin (ex. `requireModule`, `nutrition.js`).
 
 `requireCreateurFoyer` (middleware backend, à exécuter après `requireMembreFoyer`) restreint une
-route au créateur du foyer (`foyer.creePar === req.uid`) — premier cas d'usage : lignes éditoriales
-de veille (voir plus bas). MindLess n'a pas de système de rôles : c'est la seule distinction de
-droits entre membres d'un même foyer, tout le reste (recettes, planning, véhicules...) reste
-accessible à parts égales à tous les membres.
+route à l'administrateur (`estAdministrateur` : `foyer.creePar === req.uid`) — droits d'accès aux
+modules, lignes éditoriales de veille, API externe de veille. MindLess n'a pas de système de rôles
+au-delà de ces deux niveaux (administrateur / membre) et des modules ouverts : à l'intérieur d'un
+module, tout membre qui y a accès a les mêmes droits que les autres.
 
-Côté front, `public/admin.html` est le point d'entrée unique vers les réglages réservés au créateur
-du foyer (même contrôle d'accès que `veille-parametres.html` : lecture de `foyer.creePar` via
-`FoyerService.ecouterFoyer`, message "réservé au créateur du foyer" sinon) — une tuile `nav-tuile`
-dédiée sur `index.html`, masquée par défaut et affichée seulement pour le créateur. Pas de
-répertoire `admin/` par module : c'est une page d'accueil qui renvoie vers les réglages de chaque
-module (aujourd'hui `veille-parametres.html`, seul réglage admin existant) plutôt qu'un module à
-part entière — un futur réglage admin (autre module) s'ajoute comme une tuile de plus ici, pas
-comme une nouvelle route API.
+`GET /api/session` (`routes/session.js`) donne en un appel tout ce dont une page a besoin pour
+démarrer ; `GET /api/foyers/:foyerId/membres` (`routes/foyers.js`, ouvert à tout membre) résout le
+nom affiché, le statut d'administrateur et les modules de chaque membre — le client ne pouvant pas
+lire `utilisateurs/{uid}` (voir "Rejoindre un foyer").
+
+Côté front, `public/admin.html` est le point d'entrée unique vers les réglages réservés à
+l'administrateur — une tuile `nav-tuile` sur `index.html`, affichée seulement pour lui. Pas de
+répertoire `admin/` par module : c'est une page d'accueil qui renvoie vers les réglages (aujourd'hui
+`acces-modules.html`, réglage du cœur, et `veille-parametres.html`, page du module veille réservée à
+l'administrateur via `ouvrirSession({ module: 'veille', administrateur: true })`) — un futur
+réglage admin s'ajoute comme une tuile de plus ici.
 
 ### `voiture` — véhicules, entretiens, rappels
 
 - **Backend** : `domain/{Vehicule,Entretien}.js`, CRUD complet dans `routes/{vehicules,
   entretiens}.js`
 - **Frontend** : `services/{VehiculeService,EntretienService}.js`, `models/{Vehicule,Entretien}.js`,
-  `utils/{ReglesEntretien,RappelsEntretien}.js`
+  `utils/{ReglesEntretien,RappelsEntretien}.js`, `accueil.js`
+- **Pages** : `voiture.html`, `vehicule-detail.html`, `vehicule-form.html`, `entretien-form.html`
 
 `utils/ReglesEntretien.js` définit les intervalles de référence par type (`vidange` 15000km/12mois,
 `controleTechnique` 24mois, `pneus` 40000km, `freins` 30000km, `revisionGenerale` 20000km/12mois,
@@ -108,38 +216,53 @@ est une fonction pure qui retrouve le dernier entretien de chaque type et calcul
 critère km et/ou date selon ce que le type définit.
 
 Le calcul des rappels reste **côté client**, au chargement (badge sur la tuile Voiture de
-`index.html` et détail par véhicule dans `vehicule-detail.html`) — le backend ne fait que du CRUD
-sur véhicules/entretiens, il n'expose pas de route de calcul de rappels. Des notifications push
-réelles nécessiteraient Firebase Cloud Messaging + un déclencheur planifié côté backend —
-explicitement hors scope, voir roadmap.
+`index.html` via le point d'extension `accueil.js`, et détail par véhicule dans
+`vehicule-detail.html`) — le backend ne fait que du CRUD sur véhicules/entretiens, il n'expose pas
+de route de calcul de rappels. Des notifications push réelles nécessiteraient Firebase Cloud
+Messaging + un déclencheur planifié côté backend — explicitement hors scope, voir roadmap.
 
-### `menus` — recettes, planning, liste de courses, profil nutritionnel
+### `courses` — liste de courses partagée
 
-- **Backend** : `domain/{Recette,PlanningRepas,ListeCoursesItem,GenerateurListeCourses,
-  ReferentielAlimentaire,ObjectifsNutritionnels,ResoudreProfil,AnalyseNutritionnelleSemaine,
-  DateSemaine}.js`, `repositories/{RecetteRepository,PlanningRepasRepository,
-  ListeCoursesRepository}.js`, `routes/{recettes,planning,listeCourses,nutrition}.js`
-- **Frontend** : `services/{RecetteService,PlanningRepasService,ListeCoursesService,
-  NutritionService}.js`, `models/{Recette,PlanningRepas,ListeCoursesItem}.js`, `utils/DateSemaine.js`
+- **Backend** : `domain/{ListeCoursesItem,GenerateurListeCourses}.js`,
+  `repositories/ListeCoursesRepository.js`, `routes/listeCourses.js`
+- **Frontend** : `services/ListeCoursesService.js`, `models/ListeCoursesItem.js`
+- **Pages** : `courses.html`
+
+Anciennement une partie du module `menus`, séparé pour que l'administrateur puisse ouvrir la liste
+de courses sans le planning des repas (et inversement).
+
+**Génération depuis le planning** : entièrement orchestrée côté backend (`POST
+/api/foyers/:foyerId/liste-courses/generer`, voir `routes/listeCourses.js`). Les besoins de la
+semaine viennent du module menus, par son API publique (`menus/api.js`,
+`listerIngredientsSemaine`) — un membre qui n'a accès qu'à courses peut donc générer sa liste
+depuis le planning tenu par les autres, sans accéder au module menus. `domain/
+GenerateurListeCourses.fusionnerAvecListeExistante(itemsGeneres, itemsExistants)` (pur) calcule
+les écritures à faire sans jamais toucher un item déjà **coché**, en amenant un item `manuel` vers
+`mixte` plutôt que de l'écraser, et sans jamais **supprimer** un item devenu inutile (nettoyage
+manuel assumé, voir roadmap).
+
+`courses.html` groupe le résultat par `categorie` et écoute la collection en temps réel
+(`onSnapshot`) pour que les coches se synchronisent instantanément entre les membres du foyer.
+
+### `menus` — recettes, planning, profil nutritionnel
+
+- **Backend** : `domain/{Recette,PlanningRepas,IngredientsSemaine,ReferentielAlimentaire,
+  ObjectifsNutritionnels,ResoudreProfil,AnalyseNutritionnelleSemaine,DateSemaine}.js`,
+  `repositories/{RecetteRepository,PlanningRepasRepository,ProfilNutritionnelRepository}.js`,
+  `routes/{recettes,planning,nutrition}.js`, `api.js` (API publique, consommée par courses)
+- **Frontend** : `services/{RecetteService,PlanningRepasService,NutritionService}.js`,
+  `models/{Recette,PlanningRepas}.js`
+- **Pages** : `menus.html`, `recettes.html`, `recette-detail.html`, `recette-form.html`,
+  `profil-nutritionnel.html`
 
 Chaque créneau du planning (`jour` × `midi`/`soir`) supporte **soit** un texte libre (`texte`), **soit**
 une recette liée (`recetteId`) — les deux modes cohabitent selon ce que l'utilisateur choisit sur
 `menus.html`.
 
-**Liste de courses** : la génération depuis le planning est désormais entièrement orchestrée côté
-backend (`POST /api/foyers/:foyerId/liste-courses/generer`, voir `routes/listeCourses.js`) plutôt
-que par plusieurs services enchaînés côté client. `domain/GenerateurListeCourses.js` (pur) fait le
-lien planning → courses :
-- `genererItemsDepuisPlanning(planning, recettesParId)` agrège les ingrédients de tous les créneaux
-  liés à une recette (les créneaux texte libre sont ignorés), en fusionnant par `nom` + `unite`
-  normalisés (pas de conversion d'unité — `farine/g` et `farine/kg` restent deux entrées distinctes).
-- `fusionnerAvecListeExistante(itemsGeneres, itemsExistants)` calcule les écritures à faire sans
-  jamais toucher un item déjà **coché**, en amenant un item `manuel` vers `mixte` plutôt que de
-  l'écraser, et sans jamais **supprimer** un item devenu inutile (nettoyage manuel assumé, voir
-  roadmap).
-
-`courses.html` groupe le résultat par `categorie` et écoute la collection en temps réel
-(`onSnapshot`) pour que les coches se synchronisent instantanément entre les membres du foyer.
+`domain/IngredientsSemaine.agregerIngredientsSemaine(planning, recettesParId)` (pur) agrège les
+ingrédients de tous les créneaux liés à une recette (les créneaux texte libre sont ignorés), en
+fusionnant par `nom` + `unite` normalisés (pas de conversion d'unité — `farine/g` et `farine/kg`
+restent deux entrées distinctes) ; exposé aux autres modules par `api.js`.
 
 **Recettes — filtres, import/export** : `recettes.html` filtre la bibliothèque côté client (titre,
 ingrédient, tag exact via un `<select>` alimenté par les tags distincts du foyer) — pas de route
@@ -152,7 +275,12 @@ serveur, et les entrées sans `nom` ou sans `ingredients` sont silencieusement i
 part dans la réponse, `{ importees, ignorees }`) plutôt que de faire échouer tout l'import.
 
 **Profil nutritionnel** (`profil-nutritionnel.html`) : chaque membre renseigne sexe, année de
-naissance, niveau d'activité et poids (`Utilisateur.profilNutritionnel`, tous champs optionnels).
+naissance, niveau d'activité et poids (tous champs optionnels), via `GET`/`PUT
+/api/foyers/:foyerId/nutrition/profil`. Donnée du module menus, stockée dans
+`foyers/{foyerId}/profilsNutritionnels/{uid}` (`repositories/ProfilNutritionnelRepository.js`) et non
+plus sur `utilisateurs/{uid}` (cœur) — une **migration paresseuse** recopie l'ancien champ
+`utilisateurs/{uid}.profilNutritionnel` au nouvel emplacement à la première lecture (seule lecture
+d'une collection du cœur par ce module, à supprimer une fois tous les profils relus).
 `menus.html` affiche ensuite un bilan hebdomadaire par membre (`GET
 /api/foyers/:foyerId/nutrition/bilan`, voir `routes/nutrition.js`) :
 - `domain/ReferentielAlimentaire.classerIngredient(nom)` classe un ingrédient dans un des 6 groupes
@@ -175,7 +303,9 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
   IA + import dans `routes/articles.js`, API publique sans authentification dans
   `routes/articlesPublics.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
 - **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
-  `models/Article.js`, `utils/Categories.js`, page `veille-parametres.html`
+  `models/Article.js`, `utils/Categories.js`
+- **Pages** : `veille.html`, `article-detail.html`, `article-form.html`, `veille-parametres.html`
+  (réservée à l'administrateur)
 
 12 catégories fixes (`domain/Categories.js`, table de référence comme
 `voiture/utils/ReglesEntretien.js`) : `politique`, `marseille`, `culture`, `sortir_marseille`,
@@ -272,7 +402,9 @@ de lecture temps réel sur `articles`, voir plus bas).
 
 **API publique en lecture** (`GET /api/public/foyers/:foyerId/articles`, `routes/articlesPublics.js`) :
 route **volontairement sans authentification**, sous un préfixe `/api/public/` structurellement
-séparé de `/api/foyers/...` (montée sans le middleware `authentifier` dans `server.js`) plutôt qu'un
+séparé de `/api/foyers/...` (déclarée dans `routesPubliques` du manifeste `module.js`, donc montée
+par le cœur sans `requireUid`/`requireMembreFoyer`/`requireModule` — `authentifier` y passe comme
+sur tout `/api` mais ne bloque jamais en l'absence de token) plutôt qu'un
 paramètre optionnel sur la route existante — pour qu'aucune évolution future de celle-ci ne puisse
 affaiblir son contrôle d'accès par erreur. **Limite assumée, choisie en connaissance de cause** :
 quiconque connaît (ou devine) un `foyerId` peut lire tous les articles de ce foyer, ce qui déroge au
@@ -304,8 +436,8 @@ un aperçu court, seule la page de détail rend le Markdown en entier.
 Pas de lecture temps réel (`onSnapshot`) sur `articles` : la bibliothèque d'un foyer reste petite,
 `veille.html` filtre par catégorie/recherche côté client comme `recettes.html` filtre par tag.
 
-**Lignes éditoriales (persona IA par catégorie)** : le créateur du foyer (`foyer.creePar`, seule
-distinction de droits de l'app — voir `requireCreateurFoyer` dans `commun`) peut définir, depuis
+**Lignes éditoriales (persona IA par catégorie)** : l'administrateur du foyer (`foyer.creePar`,
+voir `requireCreateurFoyer` dans `coeur`) peut définir, depuis
 `veille-parametres.html`, un prompt système par catégorie qui remplace le paragraphe générique
 envoyé à Gemini (persona, angle éditorial, format de réponse attendu...). Stocké dans
 `foyers/{foyerId}/veilleConfig/lignesEditoriales` — un unique document (pas une collection), une
@@ -352,11 +484,18 @@ classique). Un `foyerId` **est** le code d'invitation partagé entre les membres
 d'invitations séparée, pas de Cloud Function nécessaire.
 
 ```
+── cœur ──────────────────────────────────────────────────────────────────────────────────────
 utilisateurs/{uid}
-  { email, nomAffiche, photoUrl, foyerId: string|null, profilNutritionnel: object|null }
+  { email, nomAffiche, photoUrl, foyerId: string|null }
+    # ancien champ profilNutritionnel encore présent sur les comptes existants : relu une fois puis
+    # recopié par le module menus (migration paresseuse, voir ProfilNutritionnelRepository)
 
 foyers/{foyerId}                       # foyerId = code d'invitation (6 caractères, ex. "A3F7K9")
-  { nom, membres: [uid...], creePar, dateCreation }
+  { nom, membres: [uid...], creePar, dateCreation,
+    modulesParMembre: { [uid]: ['voiture'|'courses'|'menus'|'veille', ...] } }
+    # creePar = administrateur, toujours accès à tout ; uid absent = aucun module (refus par défaut)
+
+── module voiture ─────────────────────────────────────────────────────────────────────────────
 
 foyers/{foyerId}/vehicules/{vehiculeId}
   { nom, marque, modele, immatriculation, kilometrageActuel, dateMajKilometrage }
@@ -364,15 +503,21 @@ foyers/{foyerId}/vehicules/{vehiculeId}
 foyers/{foyerId}/vehicules/{vehiculeId}/entretiens/{entretienId}
   { type, date, kilometrage, cout, garage, notes }
 
+── module menus ───────────────────────────────────────────────────────────────────────────────
 foyers/{foyerId}/recettes/{recetteId}
   { nom, portions, ingredients: [{ nom, quantite, unite }], instructions, tags: [] }
 
 foyers/{foyerId}/planningRepas/{idSemaine}          # idSemaine = "2026-W28" (ISO 8601)
   { jours: { lundi: { midi: {texte, recetteId}, soir: {...} }, ... dimanche }, dateMaj }
 
+foyers/{foyerId}/profilsNutritionnels/{uid}
+  { sexe, anneeNaissance, niveauActivite, poidsKg }  # tous optionnels (null)
+
+── module courses ─────────────────────────────────────────────────────────────────────────────
 foyers/{foyerId}/listeCourses/{itemId}              # collection plate = édition concurrente sans conflit
   { nom, quantite, unite, categorie, coche, origine: 'manuel'|'recette'|'mixte', recetteIds: [] }
 
+── module veille ──────────────────────────────────────────────────────────────────────────────
 foyers/{foyerId}/articles/{articleId}
   { titre, categorie, contenu, contenuAudio: string|null, motsCles: string[],
     sources: {uri, titre}[], source: 'manuel'|'ia'|'import_md'|'api', creePar, dateCreation }
@@ -385,29 +530,29 @@ foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une
 
 ### Rejoindre un foyer
 
-Créer un foyer génère un code à 6 caractères (`commun/domain/CodeInvitation.js`, alphabet sans
+Créer un foyer génère un code à 6 caractères (`coeur/domain/CodeInvitation.js`, alphabet sans
 caractères ambigus) qui sert directement d'identifiant du document `foyers/{code}`. Créer et
 rejoindre un foyer passent tous les deux par le backend (`POST /api/foyers`,
-`POST /api/foyers/:id/rejoindre`, voir `commun/repositories/FoyerRepository.js`) : c'est le SDK
+`POST /api/foyers/:id/rejoindre`, voir `coeur/repositories/FoyerRepository.js`) : c'est le SDK
 Admin qui vérifie l'existence du code et ajoute l'`uid` à `membres` (`FieldValue.arrayUnion`), en
 contournant `firestore.rules` — le client n'a plus besoin de lire un foyer avant d'en être membre.
+Le créateur devient l'administrateur ; un membre qui rejoint n'a encore accès à aucun module.
 
-**Limite connue (partiellement résolue)** : `firestore.rules` interdit toute lecture/écriture
-directe sur `utilisateurs/{uid}` (`allow read, write: if false`) ; un membre du foyer ne peut donc
-pas lire le nom affiché des autres membres directement depuis Firestore. Le backend, via le SDK
-Admin, contourne cette limite : `GET /api/foyers/:foyerId/createur` (`commun/routes/foyers.js`,
-`requireMembreFoyer`) résout le nom affiché du créateur du foyer (`UtilisateurRepository.obtenir`)
-et l'expose à `foyer.html` ("Créé par ..."/"Créé par toi"). Même pattern déjà utilisé ailleurs pour
-tous les membres, pas seulement le créateur (voir `menus/routes/nutrition.js`, qui charge
-`req.foyer.membres` puis chaque `Utilisateur`) — reste à généraliser en un endpoint "membres" pour
-que `foyer.html` affiche aussi les noms des autres membres, pas seulement leur nombre.
+`firestore.rules` interdit toute lecture/écriture directe sur `utilisateurs/{uid}` (`allow read,
+write: if false`) ; un membre ne peut donc pas lire le nom affiché des autres directement depuis
+Firestore. Le backend, via le SDK Admin, s'en charge : `GET /api/foyers/:foyerId/membres`
+(`coeur/routes/foyers.js`, `requireMembreFoyer`) renvoie pour chaque membre son nom affiché, son
+statut d'administrateur et ses modules — affichés à tous sur `settings.html`, et à l'administrateur
+sur `acces-modules.html`.
 
 **Sécurité Firestore** : `firestore.rules` n'autorise plus aucune écriture cliente (`allow write: if
-false` partout). En lecture, seules trois zones restent accessibles aux membres du foyer
-(`estMembreDuFoyer()`), pour les 3 lectures temps réel (`onSnapshot`) qui subsistent côté front :
-`foyers/{foyerId}`, `planningRepas/{document=**}`, `listeCourses/{document=**}`. `vehicules`,
-`recettes`, `articles` et `veilleConfig` sont entièrement fermés en lecture côté client (`allow
-read, write: if false`) — leurs pages passent exclusivement par `ApiClient`, sans lecture temps réel.
+false` partout). En lecture, seules trois zones restent accessibles, pour les 3 lectures temps réel
+(`onSnapshot`) qui subsistent côté front : `foyers/{foyerId}` (tout membre, `estMembreDuFoyer()`),
+`planningRepas/{document=**}` et `listeCourses/{document=**}` (membres ayant accès au module
+correspondant, `aAccesModule(foyerId, 'menus'|'courses')`). `vehicules`, `recettes`,
+`profilsNutritionnels`, `articles` et `veilleConfig` sont entièrement fermés en lecture côté client
+(`allow read, write: if false`) — leurs pages passent exclusivement par `ApiClient`, sans lecture
+temps réel.
 
 ## Conventions de code
 
@@ -422,16 +567,22 @@ read, write: if false`) — leurs pages passent exclusivement par `ApiClient`, s
 - Les modules `utils/*.js` (front) et `domain/*.js` (back) ne doivent jamais importer Firebase — ils
   reçoivent leurs données en paramètres pour rester testables sans dépendance externe
 - Pas de monorepo/package partagé entre front et backend : quelques fichiers existent volontairement
-  en double des deux côtés (`DateSemaine.js`, et historiquement `CodeInvitation.js`/
+  en double des deux côtés (`DateSemaine.js`, catalogue des modules `AccesModules.js`/`Modules.js`
+  pour les identifiants, modèles du domaine, et historiquement `CodeInvitation.js`/
   `GenerateurListeCourses.js` avant leur passage 100% backend) — assumé plutôt que mutualisé
   prématurément pour deux runtimes séparés
+- Frontières cœur/modules : voir "Règles de dépendance" plus haut — en résumé, un module n'importe
+  que le cœur (et, côté backend, l'`api.js` d'un autre module), et ne pose jamais lui-même son
+  contrôle d'accès
 
 ## Tests automatisés
 
 Voir [README.md](README.md) pour les commandes. Les répertoires `tests/` (racine) et `backend/tests/`
-sont eux-mêmes découpés en sous-dossiers par module (`commun/`, `voiture/`, `menus/`), en miroir de
-`public/<module>/utils/` et `backend/src/<module>/domain/`. Seule la logique pure y est couverte ;
-les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient manuellement.
+suivent la même séparation que le code : `coeur/` et `modules/<id>/`, en miroir de
+`public/{coeur,modules/<id>}/utils/` et `backend/src/{coeur,modules/<id>}/domain/`. Seule la logique
+pure y est couverte (dont les règles d'accès, `backend/tests/coeur/AccesModules.test.js`) ; les
+`services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient manuellement (émulateurs
+Firestore/Auth, voir README.md).
 
 ## Roadmap
 
@@ -453,8 +604,8 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
 - Bascule de toutes les écritures Firestore vers un backend Express (SDK Admin) ; le client passe en
   lecture restreinte (3 collections en temps réel, écriture nulle partout)
 - Profil nutritionnel par membre + bilan hebdomadaire comparé aux objectifs par groupe alimentaire
-- Découpage du code (front + back) par module fonctionnel (`commun`/`voiture`/`menus`) plutôt que
-  par couche technique, pour absorber les futurs modules sans réorganisation
+- Découpage du code (front + back) par module fonctionnel (alors `commun`/`voiture`/`menus`) plutôt
+  que par couche technique, pour absorber les futurs modules sans réorganisation
 
 ### ✅ Backend déployé + CI/CD
 - `mindless-backend` sur Cloud Run (projet `mindless-c58d3`, région `europe-west1`), secrets
@@ -470,12 +621,17 @@ les `services/*.js` et `repositories/*.js` qui touchent Firestore se vérifient 
   créés manuellement, générés par IA (Gemini) ou importés depuis un `.md` avec front-matter
 - Lecture à l'écran ou écoute via synthèse vocale navigateur (Web Speech API)
 
-### 🔜 Étape 7 — Nouveaux modules fonctionnels
-- Gestion des tâches, préparation vacances... — chacun en `backend/src/<module>/` +
-  `public/<module>/`, suivant le patron `commun`/`voiture`/`menus`/`veille`
-- Généraliser `GET .../createur` (qui ne résout que le nom du créateur) à un endpoint "membres" pour
-  que `foyer.html` affiche le nom de tous les membres, pas seulement leur nombre (voir "Limite
-  connue" plus haut)
+### ✅ Étape 7 — Cœur et modules, accès par membre
+- Séparation explicite du code en `coeur/` + `modules/<id>/`, front et back ; `courses` devient un
+  module à part entière (séparé de `menus`) ; profil nutritionnel déplacé du cœur vers `menus`
+- Droits d'accès aux modules par membre, gérés par l'administrateur (Admin → Accès aux modules),
+  appliqués côté backend (montage des modules), front (`ouvrirSession`) et `firestore.rules`
+- "Mon foyer" devient **Settings**, visible de tous, avec la liste des membres et leurs modules
+  (endpoint `GET .../membres`, qui remplace `GET .../createur`)
+
+### 🔜 Étape 8 — Nouveaux modules fonctionnels
+- Gestion des tâches, préparation vacances... — chacun suivant la checklist "Ajouter un module"
+  plus haut
 
 ### 🔜 Autres améliorations identifiées
 - Notifications push pour les rappels d'entretien (Cloud Functions + Firebase Cloud Messaging)

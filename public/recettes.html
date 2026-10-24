@@ -46,9 +46,8 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { RecetteService } from './menus/services/RecetteService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { RecetteService } from './modules/menus/services/RecetteService.js';
 
     const liste = document.getElementById('liste-recettes');
     const vide = document.getElementById('vide');
@@ -164,13 +163,9 @@
       }
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
-      await chargerEtAfficher();
-    });
+    const session = await ouvrirSession({ module: 'menus' });
+    foyerIdCourant = session.foyer.id;
+    await chargerEtAfficher();
   </script>
 
 </body>

@@ -53,12 +53,12 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
-    import { VehiculeService } from './voiture/services/VehiculeService.js';
-    import { EntretienService } from './voiture/services/EntretienService.js';
-    import { Entretien } from './voiture/models/Entretien.js';
-    import { REGLES_ENTRETIEN } from './voiture/utils/ReglesEntretien.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { VehiculeService } from './modules/voiture/services/VehiculeService.js';
+    import { EntretienService } from './modules/voiture/services/EntretienService.js';
+    import { Entretien } from './modules/voiture/models/Entretien.js';
+    import { REGLES_ENTRETIEN } from './modules/voiture/utils/ReglesEntretien.js';
 
     const params = new URLSearchParams(window.location.search);
     const vehiculeId = params.get('vehiculeId');
@@ -145,13 +145,9 @@
       window.location.href = `vehicule-detail.html?id=${vehiculeId}`;
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
-      foyerIdCourant = utilisateur.foyerId;
-      if (entretienId) await chargerEntretien();
-    });
+    const session = await ouvrirSession({ module: 'voiture' });
+    foyerIdCourant = session.foyer.id;
+    if (entretienId) await chargerEntretien();
   </script>
 
 </body>

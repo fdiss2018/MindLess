@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Settings</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <header class="entete">
+    <h1>⚙️ Settings</h1>
+    <p>Ton foyer et ses membres — les données du foyer sont partagées entre tous ses membres.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour hidden" id="lien-retour">← Retour</a>
+
+    <div class="carte hidden" id="carte-foyer-actuel">
+      <p class="carte-titre" id="nom-foyer"></p>
+      <p class="carte-desc" id="cree-par"></p>
+      <label>Code d'invitation à partager</label>
+      <p class="code-invitation" id="code-foyer"></p>
+      <p class="carte-desc" style="margin-top:10px">Transmets ce code à un membre de ta famille pour qu'il rejoigne ce foyer.</p>
+    </div>
+
+    <div class="carte hidden" id="carte-membres">
+      <p class="carte-titre" id="titre-membres">Membres</p>
+      <div id="liste-membres"></div>
+    </div>
+
+    <div id="zone-onboarding" class="hidden">
+      <div class="carte">
+        <p class="carte-titre">Créer un foyer</p>
+        <p class="carte-desc">Si c'est la première personne de la famille à utiliser MindLess.</p>
+        <div class="champ">
+          <label for="nom-nouveau-foyer">Nom du foyer</label>
+          <input type="text" id="nom-nouveau-foyer" class="input" placeholder="Ex. Famille Martin">
+        </div>
+        <button id="btn-creer-foyer" class="btn-primaire btn-large">Créer le foyer</button>
+      </div>
+
+      <div class="carte">
+        <p class="carte-titre">Rejoindre un foyer existant</p>
+        <p class="carte-desc">Avec le code transmis par un membre de ta famille.</p>
+        <div class="champ">
+          <label for="code-rejoindre">Code d'invitation</label>
+          <input type="text" id="code-rejoindre" class="input" placeholder="Ex. AB3D9K" style="text-transform:uppercase">
+        </div>
+        <button id="btn-rejoindre-foyer" class="btn-secondaire btn-large">Rejoindre</button>
+      </div>
+
+      <p id="msg" class="msg hidden"></p>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+
+    <p style="text-align:center">
+      <a href="#" id="btn-deconnexion">Se déconnecter</a>
+    </p>
+  </main>
+
+  <script type="module">
+    import { AuthService } from './coeur/services/AuthService.js';
+    import { UtilisateurService } from './coeur/services/UtilisateurService.js';
+    import { FoyerService } from './coeur/services/FoyerService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { MODULES } from './coeur/utils/Modules.js';
+
+    const chargement = document.getElementById('chargement');
+    const zoneOnboarding = document.getElementById('zone-onboarding');
+    const carteFoyerActuel = document.getElementById('carte-foyer-actuel');
+    const carteMembres = document.getElementById('carte-membres');
+    const lienRetour = document.getElementById('lien-retour');
+    const nomFoyer = document.getElementById('nom-foyer');
+    const creePar = document.getElementById('cree-par');
+    const codeFoyer = document.getElementById('code-foyer');
+    const titreMembres = document.getElementById('titre-membres');
+    const listeMembres = document.getElementById('liste-membres');
+    const msg = document.getElementById('msg');
+
+    const LIBELLE_MODULE = Object.fromEntries(MODULES.map((m) => [m.id, `${m.icone} ${m.libelle}`]));
+
+    let utilisateurCourant = null;
+    let desabonnerFoyer = null;
+
+    function afficherMsg(texte, erreur = true) {
+      msg.textContent = texte;
+      msg.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msg.classList.remove('hidden');
+    }
+
+    function afficherFoyer(foyer) {
+      chargement.classList.add('hidden');
+      zoneOnboarding.classList.add('hidden');
+      carteFoyerActuel.classList.remove('hidden');
+      lienRetour.classList.remove('hidden');
+      nomFoyer.textContent = foyer.nom;
+      codeFoyer.textContent = foyer.id;
+      afficherMembres(foyer);
+    }
+
+    // Noms affichés et modules résolus par le backend (le client ne lit pas utilisateurs/{uid}).
+    // Construit en textContent : nomAffiche vient du profil Google, jamais injecté en HTML.
+    async function afficherMembres(foyer) {
+      let membres;
+      try {
+        membres = await FoyerService.listerMembres(foyer.id);
+      } catch {
+        carteMembres.classList.add('hidden');
+        return;
+      }
+
+      const admin = membres.find((m) => m.estAdministrateur);
+      creePar.textContent = admin?.uid === utilisateurCourant.id
+        ? 'Créé par toi'
+        : `Créé par ${admin?.nomAffiche || 'un membre parti depuis'}`;
+
+      titreMembres.textContent = membres.length > 1 ? `${membres.length} membres` : '1 membre';
+      listeMembres.innerHTML = '';
+      membres.forEach((membre) => {
+        const ligne = document.createElement('div');
+        ligne.className = 'liste-item';
+
+        const info = document.createElement('div');
+        info.className = 'liste-item-info';
+        const nom = document.createElement('p');
+        nom.className = 'liste-item-nom';
+        nom.textContent = (membre.nomAffiche || 'Membre sans nom')
+          + (membre.uid === utilisateurCourant.id ? ' (toi)' : '');
+        const detail = document.createElement('p');
+        detail.className = 'liste-item-detail';
+        detail.textContent = membre.modules.length
+          ? membre.modules.map((id) => LIBELLE_MODULE[id] || id).join(' · ')
+          : 'Aucun module ouvert pour l\'instant';
+        info.append(nom, detail);
+        ligne.appendChild(info);
+
+        if (membre.estAdministrateur) {
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-vert';
+          badge.textContent = 'Administrateur';
+          ligne.appendChild(badge);
+        }
+        listeMembres.appendChild(ligne);
+      });
+      carteMembres.classList.remove('hidden');
+    }
+
+    function afficherOnboarding() {
+      chargement.classList.add('hidden');
+      carteFoyerActuel.classList.add('hidden');
+      carteMembres.classList.add('hidden');
+      lienRetour.classList.add('hidden');
+      zoneOnboarding.classList.remove('hidden');
+    }
+
+    // Lecture temps réel du foyer : un nouveau membre apparaît sans recharger la page.
+    function ecouterFoyer(foyerId) {
+      if (desabonnerFoyer) desabonnerFoyer();
+      desabonnerFoyer = FoyerService.ecouterFoyer(foyerId, (foyer) => {
+        if (foyer) afficherFoyer(foyer);
+        else afficherOnboarding();
+      });
+    }
+
+    document.getElementById('btn-deconnexion').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await AuthService.seDeconnecter();
+    });
+
+    document.getElementById('btn-creer-foyer').addEventListener('click', async () => {
+      const nom = document.getElementById('nom-nouveau-foyer').value.trim();
+      if (!nom) { afficherMsg('Renseigne un nom de foyer.'); return; }
+      try {
+        const foyer = await FoyerService.creerFoyer(nom);
+        await UtilisateurService.mettreAJourFoyerId(foyer.id);
+        ecouterFoyer(foyer.id);
+      } catch (err) {
+        afficherMsg(err.message);
+      }
+    });
+
+    document.getElementById('btn-rejoindre-foyer').addEventListener('click', async () => {
+      const code = document.getElementById('code-rejoindre').value.trim();
+      if (!code) { afficherMsg('Renseigne un code d\'invitation.'); return; }
+      try {
+        const foyer = await FoyerService.rejoindreFoyer(code);
+        await UtilisateurService.mettreAJourFoyerId(foyer.id);
+        ecouterFoyer(foyer.id);
+      } catch (err) {
+        afficherMsg(err.message);
+      }
+    });
+
+    // foyerRequis: false — cette page est aussi celle où l'on crée ou rejoint un foyer.
+    const session = await ouvrirSession({ foyerRequis: false });
+    utilisateurCourant = session.utilisateur;
+    if (session.foyer) ecouterFoyer(session.foyer.id);
+    else afficherOnboarding();
+  </script>
+
+</body>
+</html>

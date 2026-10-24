@@ -53,10 +53,11 @@
   </main>
 
   <script type="module">
-    import { AuthService } from './commun/services/AuthService.js';
-    import { UtilisateurService } from './commun/services/UtilisateurService.js';
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { NutritionService } from './modules/menus/services/NutritionService.js';
 
     const btnValider = document.getElementById('btn-valider');
+    let foyerIdCourant = null;
     const msg = document.getElementById('msg');
 
     function afficherMsg(texte, erreur = false) {
@@ -73,7 +74,7 @@
 
       btnValider.disabled = true;
       try {
-        await UtilisateurService.mettreAJourProfilNutritionnel({
+        await NutritionService.enregistrerProfil(foyerIdCourant, {
           sexe, anneeNaissance, niveauActivite, poidsKg,
         });
         afficherMsg('Profil enregistré.');
@@ -84,19 +85,16 @@
       }
     });
 
-    AuthService.ecouterAuth(async (user) => {
-      if (!user) { window.location.href = 'login.html'; return; }
-      const utilisateur = await UtilisateurService.obtenirOuCreerUtilisateur(user);
-      if (!utilisateur.foyerId) { window.location.href = 'foyer.html'; return; }
+    const session = await ouvrirSession({ module: 'menus' });
+    foyerIdCourant = session.foyer.id;
 
-      const profil = utilisateur.profilNutritionnel;
-      if (profil) {
-        document.getElementById('sexe').value = profil.sexe || '';
-        document.getElementById('annee-naissance').value = profil.anneeNaissance || '';
-        document.getElementById('niveau-activite').value = profil.niveauActivite || 'sedentaire';
-        document.getElementById('poids').value = profil.poidsKg || '';
-      }
-    });
+    const profil = await NutritionService.obtenirProfil(foyerIdCourant);
+    if (profil) {
+      document.getElementById('sexe').value = profil.sexe || '';
+      document.getElementById('annee-naissance').value = profil.anneeNaissance || '';
+      document.getElementById('niveau-activite').value = profil.niveauActivite || 'sedentaire';
+      document.getElementById('poids').value = profil.poidsKg || '';
+    }
   </script>
 
 </body>

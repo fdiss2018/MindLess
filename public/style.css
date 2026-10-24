@@ -350,3 +350,18 @@ hr.sep {
   border-radius: 10px;
   color: var(--accent-clair);
 }
+
+/* ── Accès aux modules (acces-modules.html) ── */
+.ligne-acces {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  margin: 0;
+  font-size: 0.95rem;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--texte);
+  cursor: pointer;
+}
+.ligne-acces input { width: 18px; height: 18px; accent-color: var(--accent); }
