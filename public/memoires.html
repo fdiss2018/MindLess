@@ -17,6 +17,70 @@
   <main>
     <a href="index.html" class="lien-retour">← Retour</a>
 
+    <button id="btn-aide" class="btn-secondaire btn-large">❓ Comment ça marche ?</button>
+
+    <!-- Aide : ouverte d'office à la première visite (ni souvenir ni chapitre), puis sur demande. -->
+    <div class="carte carte-aide hidden" id="carte-aide">
+      <p class="carte-titre">Comment ça marche ?</p>
+      <p class="aide-intro" id="aide-intro">Memory t'aide à écrire le livre de tes souvenirs, simplement en parlant.</p>
+      <button id="btn-ecouter-aide" class="btn-secondaire btn-large">🔊 Écouter l'aide</button>
+      <ol class="aide-etapes" id="aide-etapes">
+        <li>
+          <span class="aide-icone">🎤</span>
+          <div>
+            <p class="aide-titre">1. Raconte un souvenir</p>
+            <p class="aide-texte">Appuie sur le gros bouton micro et parle normalement : ce que tu dis s'écrit
+              tout seul. Quand tu as fini, appuie de nouveau sur le bouton. Tu peux aussi écrire au clavier.</p>
+          </div>
+        </li>
+        <li>
+          <span class="aide-icone">💾</span>
+          <div>
+            <p class="aide-titre">2. Garde ton souvenir</p>
+            <p class="aide-texte">Appuie sur « Garder comme souvenir » : il rejoint la liste « Mes souvenirs ».
+              Raconte-en autant que tu veux, un peu chaque jour.</p>
+          </div>
+        </li>
+        <li>
+          <span class="aide-icone">🔊</span>
+          <div>
+            <p class="aide-titre">3. Réécoute-le quand tu veux</p>
+            <p class="aide-texte">Le bouton « Écouter » lit un souvenir à voix haute. Le bouton « Supprimer »
+              efface un souvenir qui ne te plaît pas.</p>
+          </div>
+        </li>
+        <li>
+          <span class="aide-icone">📝</span>
+          <div>
+            <p class="aide-titre">4. Donne une consigne, si tu veux</p>
+            <p class="aide-texte">Une instruction dit comment écrire le prochain chapitre, par exemple « parle
+              surtout de mon père » ou « termine par un mot pour mes petits-enfants ». Dicte-la, puis appuie
+              sur « Garder comme instruction ».</p>
+          </div>
+        </li>
+        <li>
+          <span class="aide-icone">✨</span>
+          <div>
+            <p class="aide-titre">5. Fais écrire un chapitre</p>
+            <p class="aide-texte">Quand tu as raconté quelques souvenirs, appuie sur « Synthétiser en chapitre ».
+              L'ordinateur écrit alors un chapitre de tes mémoires à partir de tes souvenirs, sans rien
+              inventer.</p>
+          </div>
+        </li>
+        <li>
+          <span class="aide-icone">📚</span>
+          <div>
+            <p class="aide-titre">6. Lis ou écoute tes mémoires</p>
+            <p class="aide-texte">Tous tes chapitres sont rangés dans « Lire mes mémoires ». Chacun peut être lu
+              à voix haute.</p>
+          </div>
+        </li>
+      </ol>
+      <p class="aide-intro" id="aide-conclusion">Besoin d'un coup de main ? Un proche peut t'aider. Il peut aussi
+        choisir le style d'écriture de tes chapitres dans Settings.</p>
+      <button id="btn-fermer-aide" class="btn-primaire btn-large">👍 J'ai compris</button>
+    </div>
+
     <a href="memoires-livre.html" class="btn-secondaire btn-large" id="lien-livre">📚 Lire mes mémoires</a>
 
     <div class="carte">
@@ -135,7 +199,7 @@
         DicteeVocaleService.arreter();
         return;
       }
-      LectureVocaleService.arreter();
+      arreterLecture();
       document.getElementById('msg-note').classList.add('hidden');
       const texteAvant = texteNote.value;
       DicteeVocaleService.demarrer({
@@ -180,23 +244,55 @@
     btnGarderSouvenir.addEventListener('click', () => garder('souvenir'));
     btnGarderInstruction.addEventListener('click', () => garder('instruction'));
 
-    // ── Lecture à voix haute (un seul texte lu à la fois)
+    // ── Lecture à voix haute (un seul texte lu à la fois ; chaque bouton retrouve son libellé)
+    function arreterLecture() {
+      const bouton = boutonEnLecture;
+      boutonEnLecture = null;
+      LectureVocaleService.arreter();
+      if (bouton) bouton.textContent = bouton.dataset.libelle;
+    }
+
     function basculerLecture(bouton, texte) {
       const memeBouton = boutonEnLecture === bouton;
-      LectureVocaleService.arreter();
-      if (boutonEnLecture) boutonEnLecture.textContent = '🔊 Écouter';
-      boutonEnLecture = null;
+      arreterLecture();
       if (memeBouton) return;
 
       boutonEnLecture = bouton;
+      bouton.dataset.libelle = bouton.textContent;
       bouton.textContent = '⏹️ Arrêter';
       LectureVocaleService.lire(texte, {
         vitesse: 0.9,
-        surFin: () => {
-          if (boutonEnLecture === bouton) { bouton.textContent = '🔊 Écouter'; boutonEnLecture = null; }
-        },
+        surFin: () => { if (boutonEnLecture === bouton) arreterLecture(); },
       });
     }
+
+    // ── Aide
+    const carteAide = document.getElementById('carte-aide');
+    const btnAide = document.getElementById('btn-aide');
+    const btnEcouterAide = document.getElementById('btn-ecouter-aide');
+    btnEcouterAide.disabled = !LectureVocaleService.estDisponible();
+    let aideProposee = false;
+
+    function afficherAide(ouverte) {
+      if (!ouverte && boutonEnLecture === btnEcouterAide) arreterLecture();
+      carteAide.classList.toggle('hidden', !ouverte);
+      btnAide.classList.toggle('hidden', ouverte);
+    }
+
+    // Texte lu à voix haute : l'introduction, chaque étape (titre puis explication), la conclusion.
+    function texteAide() {
+      const etapes = [...document.querySelectorAll('#aide-etapes li')].map((li) =>
+        `${li.querySelector('.aide-titre').textContent}. ${li.querySelector('.aide-texte').textContent}`);
+      return [document.getElementById('aide-intro').textContent, ...etapes,
+        document.getElementById('aide-conclusion').textContent].join(' ').replace(/\s+/g, ' ');
+    }
+
+    btnAide.addEventListener('click', () => {
+      afficherAide(true);
+      carteAide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    document.getElementById('btn-fermer-aide').addEventListener('click', () => afficherAide(false));
+    btnEcouterAide.addEventListener('click', () => basculerLecture(btnEcouterAide, texteAide()));
 
     // ── Notes (souvenirs et instructions)
     function creerNote(note, legende) {
@@ -249,6 +345,12 @@
       nbSouvenirs = souvenirs.length;
       nbInstructions = instructions.length;
 
+      // Première visite (rien de dicté, aucun chapitre) : l'aide s'ouvre d'elle-même, une seule fois.
+      if (!aideProposee) {
+        aideProposee = true;
+        if (notes.length === 0 && chapitres.length === 0) afficherAide(true);
+      }
+
       document.getElementById('chargement').classList.add('hidden');
       document.getElementById('lien-livre').textContent = chapitres.length
         ? `📚 Lire mes mémoires (${pluriel(chapitres.length, 'chapitre')})`
@@ -281,7 +383,7 @@
         ? 'Ensuite, ces notes seront supprimées.'
         : 'Ensuite, ces notes seront rangées dans « Déjà dans mes mémoires ».';
       if (!confirm(`L'IA va écrire un nouveau chapitre de tes mémoires à partir de ${pluriel(nbSouvenirs, 'souvenir')}. ${ensuite} On y va ?`)) return;
-      LectureVocaleService.arreter();
+      arreterLecture();
       btnSynthetiser.disabled = true;
       btnSynthetiser.textContent = "✍️ L'IA écrit ton chapitre…";
       document.getElementById('msg-synthese').classList.add('hidden');

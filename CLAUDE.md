@@ -508,7 +508,10 @@ articles les plus récents de la même catégorie (hors l'article courant).
 
 Pensé pour des personnes âgées, peu à l'aise avec un clavier : textes et boutons agrandis
 (`body.module-memoires` dans `style.css`), un gros bouton micro, lecture à voix haute (débit
-ralenti) de chaque note et de chaque chapitre.
+ralenti) de chaque note et de chaque chapitre. Une **aide** (« ❓ Comment ça marche ? », en haut de
+`memoires.html`) explique le principe en 6 étapes et peut être écoutée ; elle s'ouvre d'elle-même à
+la première visite (ni note ni chapitre), puis reste accessible par son bouton. Son texte est dans
+la page (HTML statique) : à tenir à jour si le parcours change.
 
 **Mémoires personnelles** : contrairement aux autres modules (données partagées par le foyer), tout
 est rangé sous l'uid du membre (`foyers/{foyerId}/memoires/{uid}/...`) et chaque route porte sur
