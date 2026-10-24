@@ -106,18 +106,36 @@ déclarée dans leur script, par `ouvrirSession({ module: '<id>' })` (voir plus 
 ### Droits d'accès aux modules
 
 Source de vérité unique : `backend/src/coeur/domain/AccesModules.js` (fonctions pures, testées) —
-`IDS_MODULES` (catalogue), `estAdministrateur`, `modulesAccessibles`, `aAccesModule`,
-`normaliserModules`.
+`IDS_MODULES` (catalogue), `estAdministrateur`, `etatModules`, `modulesAccessibles`,
+`aAccesModule`, `normaliserModules`, et pour les essais `statutDemande`, `refusDemande`,
+`creerDemande`, `appliquerChoixAdministrateur`, `confirmerModule`, `compterDemandesEnAttente`.
 
 - L'**administrateur** du foyer est son créateur (`foyer.creePar`) : il a toujours accès à tous les
   modules, ses droits ne se modifient pas (il peut donc toujours rouvrir un module).
-- Tout autre membre n'a accès qu'aux modules listés dans `foyer.modulesParMembre[uid]` —
-  **refus par défaut** : un nouveau membre ne voit que le cœur (Settings) tant que l'administrateur
-  ne lui a rien ouvert. Un foyer antérieur à cette fonctionnalité (sans `modulesParMembre`) est donc
-  dans cet état pour ses membres non administrateurs.
-- L'administrateur les gère depuis Admin → **Accès aux modules** (`acces-modules.html`, une case
-  par membre et par module, enregistrement immédiat) → `PUT
+- Un membre a accès aux modules ouverts par l'administrateur (`foyer.modulesParMembre[uid]`) et à
+  ceux qu'il a lui-même pris **à l'essai** (voir ci-dessous) — **refus par défaut** : un nouveau
+  membre ne voit que le cœur (Settings) tant qu'aucun module ne lui est ouvert.
+- L'administrateur gère les droits depuis Admin → **Accès aux modules** (`acces-modules.html`, une
+  case par membre et par module, enregistrement immédiat) → `PUT
   /api/foyers/:foyerId/membres/:uid/modules` (`requireCreateurFoyer`).
+
+**Modules à l'essai** : depuis Settings (carte « Mes modules »), un membre ajoute lui-même un module
+(`POST /api/foyers/:foyerId/demandes-modules`, `{ module }`) : il y a accès **tout de suite**, pendant
+`DUREE_ACCES_TEMPORAIRE_JOURS` = 21 jours, le temps que l'administrateur décide.
+- Sur `acces-modules.html`, un module à l'essai apparaît **coché**, avec sa date de fin et un bouton
+  « Confirmer » (`POST .../membres/:uid/modules/:idModule/confirmer`) qui le rend définitif. Le
+  **décocher** le refuse. Cocher ou décocher une autre case ne le confirme jamais par mégarde
+  (`appliquerChoixAdministrateur` : un essai coché reste un essai).
+- Décocher un module **déjà ouvert** l'enregistre aussi comme refusé.
+- Sans réponse, l'essai **expire** de lui-même : l'expiration (ms, `demande.expiration`) est comparée
+  à l'heure courante à chaque lecture, sans tâche planifiée. Le membre peut aussi **arrêter** son essai
+  (`DELETE .../demandes-modules/:idModule`), ce qui avance l'expiration à maintenant.
+- Après un refus, une expiration ou un arrêt, le membre **ne peut pas relancer d'essai** lui-même
+  (`refusDemande`) — sinon les essais s'enchaîneraient sans jamais passer par l'administrateur ;
+  celui-ci peut toujours ouvrir le module (cocher, ou « Confirmer »), ce qui efface l'ancienne
+  demande.
+- L'administrateur voit le nombre d'essais à confirmer en badge sur ses tuiles Admin (`index.html`)
+  et Accès aux modules (`admin.html`) — `demandesEnAttente` dans `GET /api/session`.
 
 Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces mêmes règles :
 
@@ -126,12 +144,14 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
   peut être exposée sans ce contrôle ; `authentifier` est appliqué une seule fois pour tout `/api`
   dans `server.js`.
 - **Front** — chaque page démarre par `ouvrirSession(...)` (`public/coeur/services/Session.js`), qui
-  lit `GET /api/session` (utilisateur, foyer, `estAdministrateur`, `modules` — calculés par le
-  backend, jamais recalculés côté front) et renvoie vers l'accueil une page de module non ouverte
+  lit `GET /api/session` (utilisateur, foyer, `estAdministrateur`, `modules`, `etatModules`,
+  `demandesEnAttente` — calculés par le backend, jamais recalculés côté front) et renvoie vers
+  l'accueil une page de module non ouverte
   (ou une page admin pour un non-administrateur). `index.html` n'affiche que les tuiles des modules
   ouverts.
-- **`firestore.rules`** — `aAccesModule(foyerId, module)` traduit les mêmes règles pour les deux
-  lectures temps réel de modules (`planningRepas` → menus, `listeCourses` → courses).
+- **`firestore.rules`** — `aAccesModule(foyerId, module)` traduit les mêmes règles (essais en cours
+  compris, via `request.time` et `expiration`) pour les deux lectures temps réel de modules
+  (`planningRepas` → menus, `listeCourses` → courses).
 
 ### Points d'extension du cœur
 
@@ -183,8 +203,9 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
   LectureVocaleService}.js`, `models/{Utilisateur,Foyer}.js`, `utils/{Modules,DateSemaine}.js`
 - **Pages** : `index.html` (accueil : tuiles des modules ouverts + Settings + Admin), `login.html`,
   `settings.html` (ex-"Mon foyer", visible de tous : foyer, membres et leurs modules, code
-  d'invitation, puis une carte de réglages par module ouvert qui en déclare ; sert aussi à créer ou
-  rejoindre un foyer), `admin.html`, `acces-modules.html`,
+  d'invitation, « Mes modules » pour prendre un module à l'essai, puis une carte de réglages par
+  module ouvert qui en déclare ; sert aussi à créer ou rejoindre un foyer), `admin.html`,
+  `acces-modules.html`,
   `404.html`
 
 Deux briques techniques du cœur sont partagées par plusieurs modules (règle de dépendance n°2) :
@@ -570,8 +591,12 @@ utilisateurs/{uid}
 
 foyers/{foyerId}                       # foyerId = code d'invitation (6 caractères, ex. "A3F7K9")
   { nom, membres: [uid...], creePar, dateCreation,
-    modulesParMembre: { [uid]: ['voiture'|'courses'|'menus'|'veille'|'memoires', ...] } }
+    modulesParMembre: { [uid]: ['voiture'|'courses'|'menus'|'veille'|'memoires', ...] },
+    demandesModules: { [uid]: { [module]: { statut: 'en_attente'|'refusee', dateDemande,
+                                            expiration: ms, dateRefus? } } } }
     # creePar = administrateur, toujours accès à tout ; uid absent = aucun module (refus par défaut)
+    # demandesModules : modules pris à l'essai par le membre (en_attente et expiration future =
+    # accessible ; expiration passée = expiré) ou refusés — voir "Modules à l'essai"
 
 ── module voiture ─────────────────────────────────────────────────────────────────────────────
 
@@ -719,6 +744,9 @@ Firestore/Auth, voir README.md).
   appliqués côté backend (montage des modules), front (`ouvrirSession`) et `firestore.rules`
 - "Mon foyer" devient **Settings**, visible de tous, avec la liste des membres et leurs modules
   (endpoint `GET .../membres`, qui remplace `GET .../createur`)
+- Modules **à l'essai** : chaque membre ajoute lui-même un module depuis Settings, avec un accès
+  immédiat pendant 3 semaines, que l'administrateur confirme ou refuse (badge des essais à
+  confirmer sur ses tuiles)
 
 ### 🔜 Étape 8 — Nouveaux modules fonctionnels
 - ✅ `memoires` (tuile "Memory") : souvenirs dictés à la voix, relus ou écoutés, synthétisés par

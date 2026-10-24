@@ -48,10 +48,17 @@ export const FoyerRepository = {
     return !!foyer && foyer.membres.includes(uid);
   },
 
-  // Remplace la liste des modules ouverts à un membre (modulesParMembre.<uid>), sans toucher aux
-  // autres membres. FieldPath plutôt qu'une clé "modulesParMembre.<uid>" en chaîne : l'uid ne doit
-  // jamais être interprété comme un chemin.
-  async definirModulesMembre(foyerId, uid, modules) {
-    await docRef(foyerId).update(new FieldPath('modulesParMembre', uid), modules);
+  // Écrit les droits d'un membre calculés par domain/AccesModules.js, sans toucher aux autres
+  // membres : `modules` remplace modulesParMembre.<uid> (si fourni), chaque entrée de `demandes`
+  // remplace demandesModules.<uid>.<module> (null = demande effacée). Une seule écriture. FieldPath
+  // plutôt qu'une clé "modulesParMembre.<uid>" en chaîne : l'uid ne doit jamais être interprété
+  // comme un chemin.
+  async appliquerAccesMembre(foyerId, uid, { modules, demandes = {} }) {
+    const champs = [];
+    if (modules) champs.push(new FieldPath('modulesParMembre', uid), modules);
+    Object.entries(demandes).forEach(([idModule, demande]) => {
+      champs.push(new FieldPath('demandesModules', uid, idModule), demande ?? FieldValue.delete());
+    });
+    if (champs.length > 0) await docRef(foyerId).update(...champs);
   },
 };

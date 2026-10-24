@@ -30,6 +30,13 @@
       <div id="liste-membres"></div>
     </div>
 
+    <div class="carte hidden" id="carte-mes-modules">
+      <p class="carte-titre">Mes modules</p>
+      <p class="carte-desc" id="mes-modules-intro"></p>
+      <div id="liste-mes-modules"></div>
+      <p id="msg-mes-modules" class="msg hidden"></p>
+    </div>
+
     <!-- Réglages des modules ouverts à l'utilisateur : une carte par module (nom, puis réglages). -->
     <div id="parametres-modules"></div>
 
@@ -134,8 +141,9 @@
           + (membre.uid === utilisateurCourant.id ? ' (toi)' : '');
         const detail = document.createElement('p');
         detail.className = 'liste-item-detail';
-        detail.textContent = membre.modules.length
-          ? membre.modules.map((id) => LIBELLE_MODULE[id] || id).join(' · ')
+        const accessibles = membre.etatModules.filter((e) => e.statut === 'ouvert' || e.statut === 'temporaire');
+        detail.textContent = accessibles.length
+          ? accessibles.map((e) => `${LIBELLE_MODULE[e.id] || e.id}${e.statut === 'temporaire' ? ' (à l\'essai)' : ''}`).join(' · ')
           : 'Aucun module ouvert pour l\'instant';
         info.append(nom, detail);
         ligne.appendChild(info);
@@ -197,6 +205,81 @@
       }
     });
 
+    // ── Mes modules : chacun peut ajouter lui-même un module, à l'essai 3 semaines, le temps que
+    // l'administrateur confirme ou refuse (règles : backend/src/coeur/domain/AccesModules.js).
+    const formaterDate = (valeur) => new Date(valeur).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+    function afficherMesModules(session) {
+      const carte = document.getElementById('carte-mes-modules');
+      const intro = document.getElementById('mes-modules-intro');
+      const liste = document.getElementById('liste-mes-modules');
+      const msg = document.getElementById('msg-mes-modules');
+      carte.classList.remove('hidden');
+      liste.innerHTML = '';
+
+      if (session.estAdministrateur) {
+        intro.textContent = "Tu es l'administrateur du foyer : tu as accès à tous les modules. Les accès des autres membres se gèrent dans Admin → Accès aux modules.";
+        return;
+      }
+      intro.textContent = "Ajoute un module pour l'essayer : tu y as accès tout de suite, pendant 3 semaines, le temps que l'administrateur du foyer confirme.";
+
+      const ETATS = {
+        ouvert: () => '✅ Ouvert',
+        temporaire: (e) => `⏳ À l'essai jusqu'au ${formaterDate(e.expiration)} — en attente de confirmation`,
+        refuse: () => "❌ Refusé par l'administrateur",
+        expire: () => "⌛ Essai terminé sans confirmation — parles-en à l'administrateur",
+        ferme: () => 'Pas encore ajouté',
+      };
+
+      async function agir(action, texteEchec) {
+        try {
+          await action();
+          window.location.reload(); // l'accueil, les réglages et la session reflètent le nouveau droit
+        } catch (err) {
+          msg.textContent = err.message || texteEchec;
+          msg.className = 'msg msg-erreur';
+        }
+      }
+
+      MODULES.forEach((module) => {
+        const etat = session.etatModules.find((e) => e.id === module.id) || { statut: 'ferme' };
+        const ligne = document.createElement('div');
+        ligne.className = 'liste-item';
+        ligne.dataset.module = module.id;
+        const info = document.createElement('div');
+        info.className = 'liste-item-info';
+        const nom = document.createElement('p');
+        nom.className = 'liste-item-nom';
+        nom.textContent = `${module.icone} ${module.libelle}`;
+        const detail = document.createElement('p');
+        detail.className = 'liste-item-detail';
+        detail.textContent = ETATS[etat.statut](etat);
+        info.append(nom, detail);
+        ligne.appendChild(info);
+
+        if (etat.statut === 'ferme') {
+          const bouton = document.createElement('button');
+          bouton.className = 'btn-primaire';
+          bouton.textContent = '➕ Ajouter';
+          bouton.addEventListener('click', () => {
+            bouton.disabled = true;
+            agir(() => FoyerService.demanderModule(session.foyer.id, module.id), "Le module n'a pas pu être ajouté.");
+          });
+          ligne.appendChild(bouton);
+        } else if (etat.statut === 'temporaire') {
+          const bouton = document.createElement('button');
+          bouton.className = 'btn-secondaire';
+          bouton.textContent = "Arrêter l'essai";
+          bouton.addEventListener('click', () => {
+            if (!confirm(`Arrêter l'essai de ${module.libelle} ? Tu ne pourras pas le relancer toi-même : il faudra demander à l'administrateur.`)) return;
+            agir(() => FoyerService.arreterEssaiModule(session.foyer.id, module.id), "L'essai n'a pas pu être arrêté.");
+          });
+          ligne.appendChild(bouton);
+        }
+        liste.appendChild(ligne);
+      });
+    }
+
     // Point d'extension `parametres` (voir coeur/utils/Modules.js) : chaque module ouvert à
     // l'utilisateur qui déclare des réglages les construit lui-même sous son nom ; un module fermé
     // n'affiche rien (et ses routes le refuseraient de toute façon côté backend).
@@ -230,6 +313,7 @@
     utilisateurCourant = session.utilisateur;
     if (session.foyer) {
       ecouterFoyer(session.foyer.id);
+      afficherMesModules(session);
       afficherParametresModules(session);
     } else {
       afficherOnboarding();

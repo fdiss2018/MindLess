@@ -23,10 +23,26 @@ export const FoyerService = {
     return ApiClient.get(`/api/foyers/${foyerId}/membres`);
   },
 
-  // Réservé à l'administrateur du foyer (403 sinon) — remplace la liste des modules ouverts au
-  // membre `uid`.
+  // Réservé à l'administrateur du foyer (403 sinon) — `modules` : toutes les cases cochées du membre
+  // `uid`. Un module à l'essai coché reste à l'essai ; décoché, il est refusé (voir
+  // backend/src/coeur/domain/AccesModules.js).
   async definirModulesMembre(foyerId, uid, modules) {
     return ApiClient.put(`/api/foyers/${foyerId}/membres/${uid}/modules`, { modules });
+  },
+
+  // Réservé à l'administrateur — rend définitif un module (à l'essai, refusé ou expiré).
+  async confirmerModuleMembre(foyerId, uid, idModule) {
+    return ApiClient.post(`/api/foyers/${foyerId}/membres/${uid}/modules/${idModule}/confirmer`);
+  },
+
+  // L'utilisateur connecté demande un module : accès immédiat, à l'essai pendant 3 semaines.
+  async demanderModule(foyerId, idModule) {
+    return ApiClient.post(`/api/foyers/${foyerId}/demandes-modules`, { module: idModule });
+  },
+
+  // L'utilisateur connecté arrête son essai en cours (il ne pourra pas le relancer lui-même).
+  async arreterEssaiModule(foyerId, idModule) {
+    return ApiClient.delete(`/api/foyers/${foyerId}/demandes-modules/${idModule}`);
   },
 
   // Lecture temps réel conservée en direct sur Firestore (hybride) : la liste
