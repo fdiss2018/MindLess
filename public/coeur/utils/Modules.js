@@ -11,4 +11,5 @@ export const MODULES = [
   { id: 'courses', libelle: 'Courses', icone: '🛒', page: 'courses.html' },
   { id: 'menus', libelle: 'Menus', icone: '🍽️', page: 'menus.html' },
   { id: 'veille', libelle: 'Veille', icone: '🗞️', page: 'veille.html' },
+  { id: 'memoires', libelle: 'Memory', icone: '📖', page: 'memoires.html' },
 ];

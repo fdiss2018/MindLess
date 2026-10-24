@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Memory</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="module-memoires">
+
+  <header class="entete">
+    <h1>📖 Memory</h1>
+    <p>Raconte tes souvenirs : ils deviendront les chapitres de tes mémoires.</p>
+  </header>
+
+  <main>
+    <a href="index.html" class="lien-retour">← Retour</a>
+
+    <a href="memoires-livre.html" class="btn-secondaire btn-large" id="lien-livre">📚 Lire mes mémoires</a>
+
+    <div class="carte">
+      <p class="carte-titre">Nouveau souvenir</p>
+      <button id="btn-dicter" class="btn-micro">
+        <span class="icone-micro" id="icone-micro">🎤</span>
+        <span id="libelle-micro">Appuie ici et parle</span>
+      </button>
+      <p id="dictee-indisponible" class="carte-desc hidden">
+        La dictée n'est pas disponible sur ce navigateur. Utilise le micro du clavier de ton
+        téléphone, ou ouvre MindLess avec Chrome.
+      </p>
+      <textarea id="texte-note" class="input texte-memoire" rows="6"
+        placeholder="Ton souvenir s'écrit ici pendant que tu parles…"></textarea>
+      <button id="btn-garder" class="btn-primaire btn-large" disabled>💾 Garder ce souvenir</button>
+      <button id="btn-effacer" class="btn-secondaire btn-large">Effacer</button>
+      <p id="msg-note" class="msg hidden"></p>
+    </div>
+
+    <div class="carte">
+      <p class="carte-titre" id="titre-notes">Mes notes</p>
+      <div id="liste-notes"></div>
+      <p id="vide-notes" class="vide hidden">Pas encore de note. Appuie sur le micro et raconte un souvenir.</p>
+      <button id="btn-synthetiser" class="btn-primaire btn-large" disabled>✨ Synthétiser en chapitre</button>
+      <p class="carte-desc">L'IA écrit un chapitre de tes mémoires à partir de ces notes, sans rien inventer.</p>
+      <p id="msg-synthese" class="msg hidden"></p>
+    </div>
+
+    <div class="carte hidden" id="carte-notes-utilisees">
+      <p class="carte-titre">Déjà dans mes mémoires</p>
+      <div id="liste-notes-utilisees"></div>
+    </div>
+
+    <div class="carte">
+      <p class="carte-titre">Réglage</p>
+      <label class="ligne-acces">
+        <input type="checkbox" id="param-supprimer"> Supprimer mes notes une fois le chapitre écrit
+      </label>
+      <p class="carte-desc">Sinon, elles restent ici, rangées dans « Déjà dans mes mémoires ».</p>
+      <p id="msg-param" class="msg hidden"></p>
+    </div>
+
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { LectureVocaleService } from './coeur/services/LectureVocaleService.js';
+    import { MemoiresService } from './modules/memoires/services/MemoiresService.js';
+    import { DicteeVocaleService } from './modules/memoires/services/DicteeVocaleService.js';
+    import { joindreTextes } from './modules/memoires/utils/TexteDicte.js';
+
+    // Une dictée oubliée ne doit pas tourner indéfiniment : arrêt après ce délai sans nouvelle parole.
+    const ARRET_DICTEE_INACTIVE_MS = 2 * 60 * 1000;
+
+    const btnDicter = document.getElementById('btn-dicter');
+    const iconeMicro = document.getElementById('icone-micro');
+    const libelleMicro = document.getElementById('libelle-micro');
+    const texteNote = document.getElementById('texte-note');
+    const btnGarder = document.getElementById('btn-garder');
+    const btnSynthetiser = document.getElementById('btn-synthetiser');
+    const listeNotes = document.getElementById('liste-notes');
+    const listeNotesUtilisees = document.getElementById('liste-notes-utilisees');
+    const paramSupprimer = document.getElementById('param-supprimer');
+
+    let foyerIdCourant = null;
+    let minuterieInactivite = null;
+    let boutonEnLecture = null;
+
+    function afficherMsg(id, texte, erreur = false) {
+      const msg = document.getElementById(id);
+      msg.textContent = texte;
+      msg.className = 'msg ' + (erreur ? 'msg-erreur' : 'msg-ok');
+      msg.classList.remove('hidden');
+    }
+
+    const formaterDate = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // ── Dictée
+    function mettreAJourBoutonGarder() {
+      btnGarder.disabled = DicteeVocaleService.enCours() || !texteNote.value.trim();
+    }
+
+    function afficherEtatDictee(enCours) {
+      btnDicter.classList.toggle('en-ecoute', enCours);
+      iconeMicro.textContent = enCours ? '⏹️' : '🎤';
+      libelleMicro.textContent = enCours ? "J'ai fini de parler" : 'Appuie ici et parle';
+      texteNote.readOnly = enCours;
+      mettreAJourBoutonGarder();
+    }
+
+    function relancerMinuterie() {
+      clearTimeout(minuterieInactivite);
+      minuterieInactivite = setTimeout(() => DicteeVocaleService.arreter(), ARRET_DICTEE_INACTIVE_MS);
+    }
+
+    if (!DicteeVocaleService.estDisponible()) {
+      btnDicter.classList.add('hidden');
+      document.getElementById('dictee-indisponible').classList.remove('hidden');
+    }
+
+    btnDicter.addEventListener('click', () => {
+      if (DicteeVocaleService.enCours()) {
+        DicteeVocaleService.arreter();
+        return;
+      }
+      LectureVocaleService.arreter();
+      document.getElementById('msg-note').classList.add('hidden');
+      const texteAvant = texteNote.value;
+      DicteeVocaleService.demarrer({
+        surTexte: (texteFinal, texteProvisoire) => {
+          texteNote.value = joindreTextes(texteAvant, texteFinal, texteProvisoire);
+          relancerMinuterie();
+        },
+        surFin: () => {
+          clearTimeout(minuterieInactivite);
+          afficherEtatDictee(false);
+        },
+        surErreur: (message) => afficherMsg('msg-note', message, true),
+      });
+      relancerMinuterie();
+      afficherEtatDictee(true);
+    });
+
+    texteNote.addEventListener('input', mettreAJourBoutonGarder);
+
+    document.getElementById('btn-effacer').addEventListener('click', () => {
+      if (DicteeVocaleService.enCours()) DicteeVocaleService.arreter();
+      texteNote.value = '';
+      mettreAJourBoutonGarder();
+    });
+
+    btnGarder.addEventListener('click', async () => {
+      btnGarder.disabled = true;
+      try {
+        await MemoiresService.ajouterNote(foyerIdCourant, texteNote.value);
+        texteNote.value = '';
+        afficherMsg('msg-note', 'Souvenir gardé dans tes notes.');
+        await chargerNotes();
+      } catch (err) {
+        afficherMsg('msg-note', err.message || "Le souvenir n'a pas pu être gardé.", true);
+      } finally {
+        mettreAJourBoutonGarder();
+      }
+    });
+
+    // ── Lecture à voix haute (un seul texte lu à la fois)
+    function basculerLecture(bouton, texte) {
+      const memeBouton = boutonEnLecture === bouton;
+      LectureVocaleService.arreter();
+      if (boutonEnLecture) boutonEnLecture.textContent = '🔊 Écouter';
+      boutonEnLecture = null;
+      if (memeBouton) return;
+
+      boutonEnLecture = bouton;
+      bouton.textContent = '⏹️ Arrêter';
+      LectureVocaleService.lire(texte, {
+        vitesse: 0.9,
+        surFin: () => {
+          if (boutonEnLecture === bouton) { bouton.textContent = '🔊 Écouter'; boutonEnLecture = null; }
+        },
+      });
+    }
+
+    // ── Notes
+    function creerNote(note, legende) {
+      const div = document.createElement('div');
+      div.className = 'note-memoire';
+
+      const texte = document.createElement('p');
+      texte.className = 'note-texte';
+      texte.textContent = note.texte;
+      const detail = document.createElement('p');
+      detail.className = 'liste-item-detail';
+      detail.textContent = legende;
+
+      const actions = document.createElement('div');
+      actions.className = 'ligne-champs';
+      const btnEcouter = document.createElement('button');
+      btnEcouter.className = 'btn-secondaire';
+      btnEcouter.textContent = '🔊 Écouter';
+      btnEcouter.disabled = !LectureVocaleService.estDisponible();
+      btnEcouter.addEventListener('click', () => basculerLecture(btnEcouter, note.texte));
+      const btnSupprimer = document.createElement('button');
+      btnSupprimer.className = 'btn-danger';
+      btnSupprimer.textContent = '🗑️ Supprimer';
+      btnSupprimer.addEventListener('click', async () => {
+        if (!confirm('Supprimer définitivement cette note ?')) return;
+        await MemoiresService.supprimerNote(foyerIdCourant, note.id);
+        await chargerNotes();
+      });
+      actions.append(btnEcouter, btnSupprimer);
+
+      div.append(texte, detail, actions);
+      return div;
+    }
+
+    async function chargerNotes() {
+      const [notes, chapitres] = await Promise.all([
+        MemoiresService.listerNotes(foyerIdCourant),
+        MemoiresService.listerChapitres(foyerIdCourant),
+      ]);
+      const numeroChapitre = Object.fromEntries(chapitres.map((c, i) => [c.id, { numero: i + 1, titre: c.titre }]));
+      const aSynthetiser = notes.filter((n) => !n.chapitreId);
+      const utilisees = notes.filter((n) => n.chapitreId);
+
+      document.getElementById('chargement').classList.add('hidden');
+      document.getElementById('lien-livre').textContent = chapitres.length
+        ? `📚 Lire mes mémoires (${chapitres.length} chapitre${chapitres.length > 1 ? 's' : ''})`
+        : '📚 Lire mes mémoires';
+
+      listeNotes.innerHTML = '';
+      aSynthetiser.forEach((note) => listeNotes.appendChild(creerNote(note, `Dicté le ${formaterDate(note.dateCreation)}`)));
+      document.getElementById('vide-notes').classList.toggle('hidden', aSynthetiser.length > 0);
+      document.getElementById('titre-notes').textContent = aSynthetiser.length
+        ? `Mes notes (${aSynthetiser.length})` : 'Mes notes';
+      btnSynthetiser.disabled = aSynthetiser.length === 0;
+      btnSynthetiser.textContent = aSynthetiser.length
+        ? `✨ Synthétiser en chapitre (${aSynthetiser.length} note${aSynthetiser.length > 1 ? 's' : ''})`
+        : '✨ Synthétiser en chapitre';
+
+      listeNotesUtilisees.innerHTML = '';
+      utilisees.forEach((note) => {
+        const chapitre = numeroChapitre[note.chapitreId];
+        const legende = chapitre ? `Chapitre ${chapitre.numero} — ${chapitre.titre}` : 'Dans un chapitre';
+        listeNotesUtilisees.appendChild(creerNote(note, legende));
+      });
+      document.getElementById('carte-notes-utilisees').classList.toggle('hidden', utilisees.length === 0);
+    }
+
+    // ── Synthèse IA
+    btnSynthetiser.addEventListener('click', async () => {
+      if (!confirm("L'IA va écrire un nouveau chapitre de tes mémoires à partir de tes notes. On y va ?")) return;
+      LectureVocaleService.arreter();
+      btnSynthetiser.disabled = true;
+      btnSynthetiser.textContent = "✍️ L'IA écrit ton chapitre…";
+      document.getElementById('msg-synthese').classList.add('hidden');
+      try {
+        const { chapitre } = await MemoiresService.synthetiser(foyerIdCourant);
+        window.location.href = `memoires-livre.html#chapitre-${chapitre.id}`;
+      } catch (err) {
+        afficherMsg('msg-synthese', err.message || "Le chapitre n'a pas pu être écrit, réessaie.", true);
+        await chargerNotes();
+      }
+    });
+
+    // ── Réglage
+    paramSupprimer.addEventListener('change', async () => {
+      try {
+        await MemoiresService.enregistrerParametres(foyerIdCourant, { supprimerNotesApresSynthese: paramSupprimer.checked });
+        afficherMsg('msg-param', paramSupprimer.checked
+          ? 'Tes notes seront supprimées une fois le chapitre écrit.'
+          : 'Tes notes seront gardées après chaque chapitre.');
+      } catch (err) {
+        paramSupprimer.checked = !paramSupprimer.checked;
+        afficherMsg('msg-param', err.message || "Le réglage n'a pas pu être enregistré.", true);
+      }
+    });
+
+    const session = await ouvrirSession({ module: 'memoires' });
+    foyerIdCourant = session.foyer.id;
+    const parametres = await MemoiresService.obtenirParametres(foyerIdCourant);
+    paramSupprimer.checked = parametres.supprimerNotesApresSynthese;
+    await chargerNotes();
+  </script>
+
+</body>
+</html>

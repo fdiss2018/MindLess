@@ -64,8 +64,10 @@ gcloud secrets versions access latest --secret=STATIC_API_TOKEN --project=mindle
    - `STATIC_API_TOKEN` — un secret généré une fois (`openssl rand -hex 32`), voir "Tester le
      backend sans navigateur" ci-dessous.
    - `GEMINI_API_KEY` / `GEMINI_MODEL` — clé API Gemini (aistudio.google.com/apikey), utilisée par
-     le module veille pour générer des articles (voir CLAUDE.md). Optionnel si tu ne testes pas
-     `POST .../articles/generer` : la route répond alors 500 plutôt que de planter le serveur.
+     le module veille pour générer des articles et par le module memoires pour écrire les chapitres
+     (voir CLAUDE.md). Optionnel si tu ne testes pas `POST .../articles/generer` ni
+     `POST .../memoires/synthetiser` : ces routes répondent alors 500 plutôt que de planter le
+     serveur. La synthèse des mémoires n'utilise pas le grounding (pas de surcoût de recherche).
      **Grounding Google Search** : la génération in-app s'appuie sur une vraie recherche web
      (`tools: google_search`) à chaque appel — ça nécessite que le **projet GCP associé à la clé**
      ait la facturation Cloud activée (vérifie le projet sur aistudio.google.com/apikey, ce n'est
@@ -149,7 +151,7 @@ curl -X PUT http://localhost:3000/api/foyers/<FOYER_ID>/membres/<UID_DU_MEMBRE>/
   -d '{"modules": ["courses", "menus"]}'
 ```
 
-Identifiants valides : `voiture`, `courses`, `menus`, `veille` (catalogue :
+Identifiants valides : `voiture`, `courses`, `menus`, `veille`, `memoires` (catalogue :
 `backend/src/coeur/domain/AccesModules.js`) — un identifiant inconnu est ignoré. Réponse
 `200 { uid, modules }` ; `403` si l'appelant n'est pas l'administrateur, `400` pour modifier les
 droits de l'administrateur lui-même (il a toujours tout), `404` si l'uid n'est pas membre du foyer.

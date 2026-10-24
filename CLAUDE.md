@@ -50,7 +50,7 @@ route sans navigateur — voir README.md.
 
 MindLess est un **cœur** transverse (identité, foyer, session, droits d'accès, pages d'accueil /
 Settings / Admin) sur lequel se branchent des **modules** fonctionnels : `voiture`, `courses`,
-`menus`, `veille`. L'administrateur du foyer choisit, membre par membre, les modules que chacun
+`menus`, `veille`, `memoires`. L'administrateur du foyer choisit, membre par membre, les modules que chacun
 voit — pour qu'un membre ne soit pas submergé de fonctionnalités qui ne le concernent pas. Le cœur,
 lui, est visible de tous.
 
@@ -168,14 +168,25 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
 
 - **Backend** : `domain/{Utilisateur,Foyer,CodeInvitation,AccesModules}.js`, `middleware/{auth,
   requireUid,requireMembreFoyer,requireCreateurFoyer,requireModule}.js`,
-  `repositories/{UtilisateurRepository,FoyerRepository}.js`, `routes/{whoami,session,utilisateurs,
-  foyers}.js`, `monterModule.js`
-- **Frontend** : `services/{AuthService,ApiClient,Session,UtilisateurService,FoyerService}.js`,
-  `models/{Utilisateur,Foyer}.js`, `utils/{Modules,DateSemaine}.js`
+  `repositories/{UtilisateurRepository,FoyerRepository,GeminiClient}.js`, `routes/{whoami,session,
+  utilisateurs,foyers}.js`, `monterModule.js`
+- **Frontend** : `services/{AuthService,ApiClient,Session,UtilisateurService,FoyerService,
+  LectureVocaleService}.js`, `models/{Utilisateur,Foyer}.js`, `utils/{Modules,DateSemaine}.js`
 - **Pages** : `index.html` (accueil : tuiles des modules ouverts + Settings + Admin), `login.html`,
   `settings.html` (ex-"Mon foyer", visible de tous : foyer, membres et leurs modules, code
   d'invitation ; sert aussi à créer ou rejoindre un foyer), `admin.html`, `acces-modules.html`,
   `404.html`
+
+Deux briques techniques du cœur sont partagées par plusieurs modules (règle de dépendance n°2) :
+- `repositories/GeminiClient.js` (backend) — transport vers l'API Gemini : `GeminiClient.generer(
+  requete)` envoie un corps `generateContent` déjà construit par le domaine du module appelant et
+  renvoie `{ corpsJSON, groundingMetadata }` ; `fetch` natif (pas de SDK), clé en query param
+  (`GEMINI_API_KEY`), délai de 45 s, retry sur `TIMEOUT`/`DEGENERE` uniquement. Pattern repris du
+  repo frère `homeFit` (`backend/src/services/GeminiClient.js`). Utilisé par veille (articles) et
+  memoires (chapitres).
+- `services/LectureVocaleService.js` (front) — lecture à voix haute via l'API Web Speech du
+  navigateur (`speechSynthesis`), gratuite et 100% côté client ; `lire(texte, { surFin, vitesse })`.
+  Utilisé par veille et memoires.
 
 `requireMembreFoyer` (middleware backend) est l'équivalent de `estMembreDuFoyer()` dans
 `firestore.rules` : il vérifie que `req.uid` figure dans `foyer.membres` avant de laisser passer une
@@ -299,11 +310,11 @@ Un profil non renseigné fait sortir le membre du bilan plutôt que de bloquer l
 ### `veille` — articles d'actualité par catégorie
 
 - **Backend** : `domain/{Categories,Article,ArticleMarkdown,InterpreterArticleIA}.js`,
-  `repositories/{ArticleRepository,GeminiClient,LigneEditorialeRepository}.js`, CRUD + génération
-  IA + import dans `routes/articles.js`, API publique sans authentification dans
+  `repositories/{ArticleRepository,GenerationArticleIA,LigneEditorialeRepository}.js`, CRUD +
+  génération IA + import dans `routes/articles.js`, API publique sans authentification dans
   `routes/articlesPublics.js`, lignes éditoriales dans `routes/lignesEditoriales.js`
-- **Frontend** : `services/{ArticleService,LectureVocaleService,LigneEditorialeService}.js`,
-  `models/Article.js`, `utils/Categories.js`
+- **Frontend** : `services/{ArticleService,LigneEditorialeService}.js`, `models/Article.js`,
+  `utils/Categories.js` (lecture vocale : `coeur/services/LectureVocaleService.js`)
 - **Pages** : `veille.html`, `article-detail.html`, `article-form.html`, `veille-parametres.html`
   (réservée à l'administrateur)
 
@@ -327,11 +338,10 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
 
 - **Manuel** (`POST /api/foyers/:foyerId/articles`) : formulaire `article-form.html`, comme
   `recette-form.html`. Ouvert à tout membre du foyer.
-- **Génération IA** (`POST .../articles/generer`) : appelle l'API Gemini via
-  `repositories/GeminiClient.js`, qui reprend le pattern déjà en place dans le repo frère `homeFit`
-  (`backend/src/services/GeminiClient.js`) — `fetch` natif (pas de SDK), clé en query param
-  (`GEMINI_API_KEY`), JSON demandé par instruction dans le prompt (pas de `responseSchema`, voir
-  plus bas pourquoi), retry sur `TIMEOUT`/`DEGENERE` uniquement. **Deux versions systématiquement
+- **Génération IA** (`POST .../articles/generer`) : `repositories/GenerationArticleIA.js` construit
+  la requête (`domain/InterpreterArticleIA.js`) et l'envoie par le client Gemini du cœur
+  (`coeur/repositories/GeminiClient.js`, voir `coeur`) — JSON demandé par instruction dans le prompt
+  (pas de `responseSchema`, voir plus bas pourquoi). **Deux versions systématiquement
   générées** (voir
   `Article.contenuAudio`) : `contenu` (à lire à l'écran, plusieurs paragraphes) et `contenuAudio`
   (même information réécrite pour l'oral — phrases courtes, sans sigle non prononçable, sans
@@ -348,7 +358,7 @@ message d'erreur ou `null` — chaque route peut contextualiser le message, ex. 
   réussi à chaque fois sur le même prompt sans schéma) — contredit la documentation Google qui
   présente cette combinaison comme supportée sur Gemini 3, mais confirmé non fonctionnel ici en
   pratique. Le JSON est donc demandé par instruction dans le prompt, avec le `JSON.parse` + retry
-  `DEGENERE` déjà existant dans `GeminiClient.js` comme filet de sécurité.
+  `DEGENERE` déjà existant dans `coeur/repositories/GeminiClient.js` comme filet de sécurité.
   Le modèle décide lui-même, par appel, s'il déclenche réellement une recherche — ce n'est jamais
   garanti — donc le prompt garde une règle anti-hallucination conditionnelle : les formules datées
   ("cette semaine", "synthèse hebdomadaire"...) ne sont autorisées que si une recherche a
@@ -416,7 +426,7 @@ champ à caractère personnel du modèle), les autres champs sont renvoyés tels
 
 **Lecture/écoute** : pas de suivi d'un statut "lu" (non demandé) — un article se consulte à l'écran
 (`article-detail.html`) ou s'écoute via le bouton "🔊 Écouter", qui appelle l'API Web Speech du
-navigateur (`speechSynthesis`, `services/LectureVocaleService.js`) — gratuite, 100% côté client,
+navigateur (`speechSynthesis`, `coeur/services/LectureVocaleService.js`) — gratuite, 100% côté client,
 aucune dépendance/coût backend, mais qualité de voix variable selon l'OS/navigateur et pas de
 fichier audio téléchargeable. Le bouton lit `article.contenuAudio` en priorité, et ne retombe sur
 `article.contenu` que pour les articles sans version audio dédiée (manuel/import `.md`/API).
@@ -476,6 +486,47 @@ prose, jamais par lien). Le renvoi *cliquable* vers les articles liés est gér�
 déterministe (pas par l'IA) : `article-detail.html` affiche un bloc "Voir aussi" listant les 5
 articles les plus récents de la même catégorie (hors l'article courant).
 
+### `memoires` — mémoires dictées, synthétisées en chapitres (tuile "Memory")
+
+- **Backend** : `domain/{NoteMemoire,ChapitreMemoire,SyntheseMemoires}.js`,
+  `repositories/MemoiresRepository.js`, `routes/memoires.js`
+- **Frontend** : `services/{MemoiresService,DicteeVocaleService}.js`,
+  `models/{NoteMemoire,ChapitreMemoire}.js`, `utils/TexteDicte.js` (lecture vocale :
+  `coeur/services/LectureVocaleService.js`)
+- **Pages** : `memoires.html` (dicter, garder, relire et écouter ses notes, synthétiser, réglage),
+  `memoires-livre.html` (les chapitres, à lire ou écouter)
+
+Pensé pour des personnes âgées, peu à l'aise avec un clavier : textes et boutons agrandis
+(`body.module-memoires` dans `style.css`), un gros bouton micro, lecture à voix haute (débit
+ralenti) de chaque note et de chaque chapitre.
+
+**Mémoires personnelles** : contrairement aux autres modules (données partagées par le foyer), tout
+est rangé sous l'uid du membre (`foyers/{foyerId}/memoires/{uid}/...`) et chaque route porte sur
+`req.uid` — chacun n'accède qu'à ses propres mémoires, même si plusieurs membres du foyer ont le
+module.
+
+**Dictée** (`services/DicteeVocaleService.js`) : API Web Speech du navigateur (`SpeechRecognition`),
+gratuite et côté client — Chrome/Edge (ordinateur, Android) et Safari ; absente de Firefox, où la
+page propose le micro du clavier du téléphone à la place. Sur Chrome, l'audio est transcrit par les
+serveurs de Google. Une session de reconnaissance par phrase, relancée automatiquement tant que
+l'utilisateur n'a pas appuyé sur "J'ai fini" (le mode continu duplique les résultats sur Chrome
+Android) ; arrêt automatique après 2 minutes sans parole. `utils/TexteDicte.js` (pur) met chaque
+phrase reconnue en forme (majuscule, point final), la reconnaissance vocale ne ponctuant pas. Le
+texte reste modifiable au clavier avant d'être gardé.
+
+**Synthèse** (`POST .../memoires/synthetiser`) : les notes pas encore synthétisées (au plus
+`MAX_NOTES_PAR_CHAPITRE` = 50, les plus anciennes d'abord) deviennent un nouveau chapitre, ajouté à
+la fin des mémoires. `domain/SyntheseMemoires.construireRequeteChapitre` demande à Gemini un
+chapitre à la première personne, **fidèle aux notes** (aucun fait, nom, date ou lieu inventé ;
+correction des erreurs de transcription évidentes), avec les titres des chapitres précédents en
+contexte ; pas de grounding (souvenirs personnels), donc JSON imposé par `responseSchema` —
+contrairement à la veille. `validerChapitreIA` refuse un titre ou un contenu vide. Chapitre et
+notes sont écrits en un seul batch : les notes sont **supprimées** ou **rattachées au chapitre**
+(`chapitreId`) selon le réglage du membre `supprimerNotesApresSynthese` (par défaut `false` : notes
+conservées, rangées dans "Déjà dans mes mémoires"). Supprimer un chapitre remet ses notes conservées
+"à synthétiser" — c'est le moyen de refaire un chapitre qui ne convient pas. Le numéro d'un
+chapitre n'est pas stocké : il découle de l'ordre de création.
+
 ## Modèle de données Firestore
 
 MindLess est une application **familiale multi-utilisateurs** : toutes les données métier sont
@@ -492,7 +543,7 @@ utilisateurs/{uid}
 
 foyers/{foyerId}                       # foyerId = code d'invitation (6 caractères, ex. "A3F7K9")
   { nom, membres: [uid...], creePar, dateCreation,
-    modulesParMembre: { [uid]: ['voiture'|'courses'|'menus'|'veille', ...] } }
+    modulesParMembre: { [uid]: ['voiture'|'courses'|'menus'|'veille'|'memoires', ...] } }
     # creePar = administrateur, toujours accès à tout ; uid absent = aucun module (refus par défaut)
 
 ── module voiture ─────────────────────────────────────────────────────────────────────────────
@@ -526,6 +577,16 @@ foyers/{foyerId}/articles/{articleId}
 
 foyers/{foyerId}/veilleConfig/lignesEditoriales    # document singleton, pas une collection
   { [categorie]: texte, ..., dateMaj }              # clé absente = valeur par défaut (voir Categories.js)
+
+── module memoires (personnel : rangé sous l'uid du membre) ──────────────────────────────────
+foyers/{foyerId}/memoires/{uid}
+  { supprimerNotesApresSynthese: boolean }          # réglage du membre, absent = false
+
+foyers/{foyerId}/memoires/{uid}/notes/{noteId}
+  { texte, chapitreId: string|null, dateCreation }  # chapitreId null = encore à synthétiser
+
+foyers/{foyerId}/memoires/{uid}/chapitres/{chapitreId}
+  { titre, contenu, noteIds: [], dateCreation }     # contenu : paragraphes séparés par une ligne vide
 ```
 
 ### Rejoindre un foyer
@@ -550,7 +611,8 @@ false` partout). En lecture, seules trois zones restent accessibles, pour les 3 
 (`onSnapshot`) qui subsistent côté front : `foyers/{foyerId}` (tout membre, `estMembreDuFoyer()`),
 `planningRepas/{document=**}` et `listeCourses/{document=**}` (membres ayant accès au module
 correspondant, `aAccesModule(foyerId, 'menus'|'courses')`). `vehicules`, `recettes`,
-`profilsNutritionnels`, `articles` et `veilleConfig` sont entièrement fermés en lecture côté client
+`profilsNutritionnels`, `articles`, `veilleConfig` et `memoires` sont entièrement fermés en lecture
+côté client
 (`allow read, write: if false`) — leurs pages passent exclusivement par `ApiClient`, sans lecture
 temps réel.
 
@@ -630,8 +692,13 @@ Firestore/Auth, voir README.md).
   (endpoint `GET .../membres`, qui remplace `GET .../createur`)
 
 ### 🔜 Étape 8 — Nouveaux modules fonctionnels
+- ✅ `memoires` (tuile "Memory") : souvenirs dictés à la voix, relus ou écoutés, synthétisés par
+  l'IA en chapitres de mémoires ; premier module ajouté avec la checklist "Ajouter un module", qui a
+  fait remonter dans le cœur le client Gemini et la lecture vocale (partagés avec veille)
 - Gestion des tâches, préparation vacances... — chacun suivant la checklist "Ajouter un module"
   plus haut
+- Memory : modifier un chapitre à la main, partager ses mémoires avec la famille (lecture par les
+  autres membres), export PDF/livre imprimable
 
 ### 🔜 Autres améliorations identifiées
 - Notifications push pour les rappels d'entretien (Cloud Functions + Firebase Cloud Messaging)

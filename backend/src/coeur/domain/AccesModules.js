@@ -10,7 +10,7 @@
 // - tout autre membre n'a accès qu'aux modules listés pour lui dans foyer.modulesParMembre[uid] ;
 //   aucune entrée = aucun module (refus par défaut : un nouveau membre ne voit que le cœur, Settings,
 //   jusqu'à ce que l'administrateur lui ouvre des modules).
-export const IDS_MODULES = ['voiture', 'courses', 'menus', 'veille'];
+export const IDS_MODULES = ['voiture', 'courses', 'menus', 'veille', 'memoires'];
 
 export function estAdministrateur(foyer, uid) {
   return !!foyer && !!uid && foyer.creePar === uid;

@@ -1,14 +1,13 @@
-// Frontière réseau vers l'API Gemini — la construction de la requête et la validation de la
-// réponse sont déléguées à domain/InterpreterArticleIA.js (logique pure, testable sans réseau) ;
-// ce fichier ne fait que l'appel HTTP et la gestion d'erreur. Reprend le pattern déjà en place
-// dans homeFit/backend/src/services/GeminiClient.js (même API Gemini, même stratégie de retry).
-// La clé n'existe que côté serveur (process.env.GEMINI_API_KEY) — jamais envoyée au navigateur.
-import {
-  construireRequeteArticleIA, validerArticleIA, extraireSourcesGrounding,
-} from '../domain/InterpreterArticleIA.js';
+// Frontière réseau vers l'API Gemini, partagée par les modules qui utilisent l'IA (veille,
+// memoires) : appel HTTP, délai maximum, gestion d'erreur et nouvelles tentatives. La construction
+// de la requête et la validation de la réponse restent dans le domaine de chaque module (logique
+// pure, testable sans réseau — ex. veille/domain/InterpreterArticleIA.js). Reprend le pattern déjà
+// en place dans homeFit/backend/src/services/GeminiClient.js (même API Gemini, même stratégie de
+// retry). La clé n'existe que côté serveur (process.env.GEMINI_API_KEY) — jamais envoyée au
+// navigateur.
 
 // Délai maximum avant d'abandonner UN appel Gemini — 45s (au lieu de 30s) depuis l'activation du
-// grounding Google Search : un aller-retour de recherche s'ajoute avant la synthèse de la réponse.
+// grounding Google Search en veille : un aller-retour de recherche s'ajoute avant la réponse.
 const DELAI_MAX_MS = 45_000;
 
 // Une génération dégénérée (JSON invalide/tronqué) est probabiliste — un nombre de tentatives
@@ -83,16 +82,10 @@ async function avecRetry(requete) {
 }
 
 export const GeminiClient = {
-  async genererArticleParIA({
-    categorie, sujet, ligneEditoriale, articlesPrecedents,
-  }) {
-    const requete = construireRequeteArticleIA({
-      categorie, sujet, ligneEditoriale, articlesPrecedents,
-    });
-    const { corpsJSON, groundingMetadata } = await avecRetry(requete);
-    return {
-      ...validerArticleIA(corpsJSON),
-      sources: extraireSourcesGrounding(groundingMetadata),
-    };
+  // Envoie un corps de requête generateContent déjà construit par le domaine du module appelant.
+  // La réponse du modèle doit être du JSON (demandé par responseMimeType, ou par instruction dans
+  // le prompt quand le grounding l'interdit) : renvoie { corpsJSON, groundingMetadata }.
+  async generer(requete) {
+    return avecRetry(requete);
   },
 };

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindLess - Mes mémoires</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="module-memoires">
+
+  <header class="entete">
+    <h1>📚 Mes mémoires</h1>
+    <p id="sous-titre">Chaque chapitre a été écrit à partir de tes souvenirs.</p>
+  </header>
+
+  <main>
+    <a href="memoires.html" class="lien-retour">← Retour à mes notes</a>
+
+    <div id="liste-chapitres"></div>
+    <p id="vide" class="vide hidden">
+      Tes mémoires sont encore vides : dicte quelques souvenirs, puis appuie sur « Synthétiser en chapitre ».
+    </p>
+    <p id="chargement" class="chargement">Chargement...</p>
+  </main>
+
+  <script type="module">
+    import { ouvrirSession } from './coeur/services/Session.js';
+    import { LectureVocaleService } from './coeur/services/LectureVocaleService.js';
+    import { MemoiresService } from './modules/memoires/services/MemoiresService.js';
+
+    const listeChapitres = document.getElementById('liste-chapitres');
+    let foyerIdCourant = null;
+    let boutonEnLecture = null;
+
+    const formaterDate = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    function basculerLecture(bouton, texte) {
+      const memeBouton = boutonEnLecture === bouton;
+      LectureVocaleService.arreter();
+      if (boutonEnLecture) boutonEnLecture.textContent = '🔊 Écouter ce chapitre';
+      boutonEnLecture = null;
+      if (memeBouton) return;
+
+      boutonEnLecture = bouton;
+      bouton.textContent = '⏹️ Arrêter la lecture';
+      LectureVocaleService.lire(texte, {
+        vitesse: 0.9,
+        surFin: () => {
+          if (boutonEnLecture === bouton) { bouton.textContent = '🔊 Écouter ce chapitre'; boutonEnLecture = null; }
+        },
+      });
+    }
+
+    // Construit en textContent : le contenu vient de l'IA, il n'est jamais injecté en HTML.
+    function creerChapitre(chapitre, numero) {
+      const carte = document.createElement('article');
+      carte.className = 'carte chapitre-memoire';
+      carte.id = `chapitre-${chapitre.id}`;
+
+      const etiquette = document.createElement('p');
+      etiquette.className = 'chapitre-numero';
+      etiquette.textContent = `Chapitre ${numero}`;
+      const titre = document.createElement('h2');
+      titre.className = 'chapitre-titre';
+      titre.textContent = chapitre.titre;
+      const date = document.createElement('p');
+      date.className = 'liste-item-detail';
+      date.textContent = `Écrit le ${formaterDate(chapitre.dateCreation)}`;
+
+      const texte = document.createElement('div');
+      texte.className = 'chapitre-texte';
+      chapitre.paragraphes().forEach((paragraphe) => {
+        const p = document.createElement('p');
+        p.textContent = paragraphe;
+        texte.appendChild(p);
+      });
+
+      const btnEcouter = document.createElement('button');
+      btnEcouter.className = 'btn-secondaire btn-large';
+      btnEcouter.textContent = '🔊 Écouter ce chapitre';
+      btnEcouter.disabled = !LectureVocaleService.estDisponible();
+      btnEcouter.addEventListener('click', () => basculerLecture(btnEcouter, `${chapitre.titre}. ${chapitre.contenu}`));
+
+      const btnSupprimer = document.createElement('button');
+      btnSupprimer.className = 'btn-danger';
+      btnSupprimer.textContent = '🗑️ Supprimer ce chapitre';
+      btnSupprimer.addEventListener('click', async () => {
+        if (!confirm('Supprimer ce chapitre ? Les notes que tu as gardées pourront servir à en écrire un nouveau.')) return;
+        LectureVocaleService.arreter();
+        await MemoiresService.supprimerChapitre(foyerIdCourant, chapitre.id);
+        await chargerChapitres();
+      });
+
+      carte.append(etiquette, titre, date, btnEcouter, texte, btnSupprimer);
+      return carte;
+    }
+
+    async function chargerChapitres() {
+      const chapitres = await MemoiresService.listerChapitres(foyerIdCourant);
+      document.getElementById('chargement').classList.add('hidden');
+      document.getElementById('vide').classList.toggle('hidden', chapitres.length > 0);
+      listeChapitres.innerHTML = '';
+      chapitres.forEach((chapitre, i) => listeChapitres.appendChild(creerChapitre(chapitre, i + 1)));
+    }
+
+    const session = await ouvrirSession({ module: 'memoires' });
+    foyerIdCourant = session.foyer.id;
+    await chargerChapitres();
+
+    // Arrivée depuis "Synthétiser en chapitre" : on amène directement au nouveau chapitre.
+    const cible = window.location.hash && document.getElementById(window.location.hash.slice(1));
+    if (cible) {
+      const msg = document.createElement('p');
+      msg.className = 'msg msg-ok';
+      msg.textContent = '✨ Nouveau chapitre ajouté à tes mémoires';
+      cible.prepend(msg);
+      cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  </script>
+
+</body>
+</html>
