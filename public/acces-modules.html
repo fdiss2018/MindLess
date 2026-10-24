@@ -17,6 +17,13 @@
   <main>
     <a href="admin.html" class="lien-retour">← Retour</a>
 
+    <p id="resume-demandes" class="msg hidden"></p>
+    <p class="carte-desc">
+      Un membre peut ajouter lui-même un module depuis Settings : il l'a alors à l'essai pendant
+      3 semaines. Confirme-le pour le lui laisser, ou décoche-le pour le refuser. Sans réponse,
+      l'essai s'arrête tout seul.
+    </p>
+
     <div id="liste-membres"></div>
     <p id="msg" class="msg hidden"></p>
     <p id="chargement" class="chargement">Chargement...</p>
@@ -29,6 +36,7 @@
 
     const listeMembres = document.getElementById('liste-membres');
     const msg = document.getElementById('msg');
+    let foyerIdCourant = null;
 
     function afficherMsg(texte, erreur = false) {
       msg.textContent = texte;
@@ -36,12 +44,34 @@
       msg.classList.remove('hidden');
     }
 
-    // Une carte par membre, une case par module. Chaque changement est enregistré immédiatement
-    // (liste complète des cases cochées du membre) ; en cas d'échec la case est remise en l'état.
-    // L'administrateur a toujours accès à tout : ses cases sont cochées et désactivées.
-    function creerCarteMembre(foyerId, membre) {
+    const formaterDate = (valeur) => new Date(valeur).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+    // Étiquette à côté d'une case, selon l'état du module pour ce membre.
+    const ETIQUETTES = {
+      temporaire: (e) => ({ classe: 'badge-jaune', texte: `⏳ à l'essai jusqu'au ${formaterDate(e.expiration)}` }),
+      refuse: () => ({ classe: 'badge-rouge', texte: 'refusé' }),
+      expire: () => ({ classe: 'badge-gris', texte: 'essai terminé' }),
+    };
+
+    async function enregistrer(action, texteOk, nom) {
+      listeMembres.querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+      try {
+        await action();
+        afficherMsg(`${texteOk} (${nom || 'membre sans nom'}).`);
+      } catch (err) {
+        afficherMsg(err.message || "L'enregistrement a échoué.", true);
+      }
+      await chargerMembres();
+    }
+
+    // Une carte par membre, une ligne par module. Case cochée = module accessible (définitif ou à
+    // l'essai). Chaque changement envoie la liste complète des cases cochées du membre ; un module à
+    // l'essai ne devient définitif que par son bouton « Confirmer ». L'administrateur a toujours
+    // accès à tout : ses cases sont cochées et désactivées.
+    function creerCarteMembre(membre) {
       const carte = document.createElement('div');
       carte.className = 'carte';
+      carte.dataset.membre = membre.uid;
 
       const titre = document.createElement('p');
       titre.className = 'carte-titre';
@@ -56,39 +86,72 @@
       }
 
       const cases = MODULES.map((module) => {
-        const ligne = document.createElement('label');
-        ligne.className = 'ligne-acces';
+        const etat = membre.etatModules.find((e) => e.id === module.id) || { statut: 'ferme' };
+        const ligne = document.createElement('div');
+        ligne.className = 'ligne-module';
+        ligne.dataset.module = module.id;
+
+        const label = document.createElement('label');
+        label.className = 'ligne-acces';
         const caseACocher = document.createElement('input');
         caseACocher.type = 'checkbox';
         caseACocher.value = module.id;
-        caseACocher.checked = membre.modules.includes(module.id);
+        caseACocher.checked = etat.statut === 'ouvert' || etat.statut === 'temporaire';
         caseACocher.disabled = membre.estAdministrateur;
-        ligne.append(caseACocher, ` ${module.icone} ${module.libelle}`);
+        label.append(caseACocher, ` ${module.icone} ${module.libelle}`);
+        ligne.appendChild(label);
+
+        const etiquette = ETIQUETTES[etat.statut]?.(etat);
+        if (etiquette) {
+          const badge = document.createElement('span');
+          badge.className = `badge ${etiquette.classe}`;
+          badge.textContent = etiquette.texte;
+          ligne.appendChild(badge);
+        }
+        if (etat.statut === 'temporaire') {
+          const btnConfirmer = document.createElement('button');
+          btnConfirmer.className = 'btn-primaire';
+          btnConfirmer.textContent = '✅ Confirmer';
+          btnConfirmer.addEventListener('click', () => enregistrer(
+            () => FoyerService.confirmerModuleMembre(foyerIdCourant, membre.uid, module.id),
+            `${module.libelle} confirmé`, membre.nomAffiche,
+          ));
+          ligne.appendChild(btnConfirmer);
+        }
         carte.appendChild(ligne);
         return caseACocher;
       });
 
-      cases.forEach((caseACocher) => caseACocher.addEventListener('change', async () => {
+      cases.forEach((caseACocher) => caseACocher.addEventListener('change', () => {
         const modules = cases.filter((c) => c.checked).map((c) => c.value);
-        cases.forEach((c) => { c.disabled = true; });
-        try {
-          await FoyerService.definirModulesMembre(foyerId, membre.uid, modules);
-          afficherMsg(`Accès de ${membre.nomAffiche || 'ce membre'} enregistrés.`);
-        } catch (err) {
-          caseACocher.checked = !caseACocher.checked;
-          afficherMsg(err.message || "L'enregistrement a échoué.", true);
-        } finally {
-          cases.forEach((c) => { c.disabled = false; });
-        }
+        enregistrer(
+          () => FoyerService.definirModulesMembre(foyerIdCourant, membre.uid, modules),
+          'Accès enregistrés', membre.nomAffiche,
+        );
       }));
 
       return carte;
     }
 
+    async function chargerMembres() {
+      const membres = await FoyerService.listerMembres(foyerIdCourant);
+      document.getElementById('chargement').classList.add('hidden');
+      listeMembres.innerHTML = '';
+      membres.forEach((membre) => listeMembres.appendChild(creerCarteMembre(membre)));
+
+      const enAttente = membres
+        .filter((m) => !m.estAdministrateur)
+        .flatMap((m) => m.etatModules)
+        .filter((e) => e.statut === 'temporaire').length;
+      const resume = document.getElementById('resume-demandes');
+      resume.textContent = `⏳ ${enAttente} essai${enAttente > 1 ? 's' : ''} à confirmer`;
+      resume.className = 'msg msg-ok';
+      resume.classList.toggle('hidden', enAttente === 0);
+    }
+
     const session = await ouvrirSession({ administrateur: true });
-    const membres = await FoyerService.listerMembres(session.foyer.id);
-    document.getElementById('chargement').classList.add('hidden');
-    membres.forEach((membre) => listeMembres.appendChild(creerCarteMembre(session.foyer.id, membre)));
+    foyerIdCourant = session.foyer.id;
+    await chargerMembres();
   </script>
 
 </body>

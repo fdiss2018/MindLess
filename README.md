@@ -152,9 +152,17 @@ curl -X PUT http://localhost:3000/api/foyers/<FOYER_ID>/membres/<UID_DU_MEMBRE>/
 ```
 
 Identifiants valides : `voiture`, `courses`, `menus`, `veille`, `memoires` (catalogue :
-`backend/src/coeur/domain/AccesModules.js`) — un identifiant inconnu est ignoré. Réponse
-`200 { uid, modules }` ; `403` si l'appelant n'est pas l'administrateur, `400` pour modifier les
-droits de l'administrateur lui-même (il a toujours tout), `404` si l'uid n'est pas membre du foyer.
+`backend/src/coeur/domain/AccesModules.js`) — un identifiant inconnu est ignoré. `modules` est la
+liste complète des cases cochées ; un module que le membre a à l'essai reste à l'essai s'il est
+coché, et devient refusé s'il est décoché. Réponse `200 { uid, modules }` (modules définitifs) ;
+`403` si l'appelant n'est pas l'administrateur, `400` pour modifier les droits de l'administrateur
+lui-même (il a toujours tout), `404` si l'uid n'est pas membre du foyer.
+
+**Modules à l'essai** (voir CLAUDE.md) : un membre prend un module à l'essai pour 3 semaines avec
+`POST /api/foyers/<FOYER_ID>/demandes-modules` (`{"module": "memoires"}`, avec `X-Test-Uid` = le
+membre), l'arrête avec `DELETE .../demandes-modules/memoires` ; l'administrateur le rend définitif
+avec `POST .../membres/<UID_DU_MEMBRE>/modules/memoires/confirmer`. `GET /api/session` donne
+l'état de chaque module (`etatModules` : `ouvert`, `temporaire`, `refuse`, `expire`, `ferme`).
 
 ⚠️ **Refus par défaut** : un membre sans entrée dans `foyer.modulesParMembre` n'a accès à aucun
 module. Au premier déploiement de cette fonctionnalité, les membres existants (hors administrateur)

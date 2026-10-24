@@ -21,6 +21,7 @@
       <a href="acces-modules.html" class="nav-tuile">
         <span class="icone">👥</span>
         <span class="titre">Accès aux modules</span>
+        <span class="tuile-badge hidden" id="badge-acces"></span>
       </a>
       <a href="veille-parametres.html" class="nav-tuile">
         <span class="icone">🗞️</span>
@@ -34,7 +35,12 @@
   <script type="module">
     import { ouvrirSession } from './coeur/services/Session.js';
 
-    await ouvrirSession({ administrateur: true });
+    const session = await ouvrirSession({ administrateur: true });
+    if (session.demandesEnAttente > 0) {
+      const badge = document.getElementById('badge-acces');
+      badge.textContent = session.demandesEnAttente;
+      badge.classList.remove('hidden');
+    }
     document.getElementById('chargement').classList.add('hidden');
     document.getElementById('nav-admin').classList.remove('hidden');
   </script>

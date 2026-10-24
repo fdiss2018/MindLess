@@ -25,6 +25,7 @@
       <a href="admin.html" class="nav-tuile hidden" id="tuile-admin">
         <span class="icone">🛠️</span>
         <span class="titre">Admin</span>
+        <span class="tuile-badge hidden" id="badge-admin"></span>
       </a>
     </div>
 
@@ -84,7 +85,15 @@
     });
 
     document.getElementById('aucun-module').classList.toggle('hidden', modulesOuverts.length > 0);
-    if (session.estAdministrateur) document.getElementById('tuile-admin').classList.remove('hidden');
+    if (session.estAdministrateur) {
+      document.getElementById('tuile-admin').classList.remove('hidden');
+      // Essais de modules demandés par des membres, en attente de confirmation (voir acces-modules.html).
+      if (session.demandesEnAttente > 0) {
+        const badge = document.getElementById('badge-admin');
+        badge.textContent = session.demandesEnAttente;
+        badge.classList.remove('hidden');
+      }
+    }
   </script>
 
 </body>

@@ -365,6 +365,10 @@ hr.sep {
   cursor: pointer;
 }
 .ligne-acces input { width: 18px; height: 18px; accent-color: var(--accent); }
+/* Ligne d'un module sur acces-modules.html : case, état (à l'essai, refusé...) et bouton Confirmer */
+.ligne-module { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 4px 0; }
+.ligne-module .ligne-acces { flex: 1 1 160px; }
+.ligne-module .btn-primaire { padding: 8px 12px; }
 
 /* ── Module memoires : lisibilité pour personnes âgées (gros textes, gros boutons) ── */
 .module-memoires .carte-titre { font-size: 1.15rem; }

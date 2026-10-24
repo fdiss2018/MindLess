@@ -11,13 +11,17 @@ service cloud.firestore {
     }
 
     // Traduction de backend/src/coeur/domain/AccesModules.js (seule source de vérité des droits) :
-    // membre du foyer, et administrateur (créateur) ou module listé dans modulesParMembre[uid].
+    // membre du foyer, et administrateur (créateur), module listé dans modulesParMembre[uid], ou
+    // module à l'essai pas encore expiré (demandesModules[uid][module], expiration en ms).
     function aAccesModule(foyerId, module) {
       let foyer = get(/databases/$(database)/documents/foyers/$(foyerId)).data;
+      let demande = foyer.get('demandesModules', {}).get(request.auth.uid, {}).get(module, {});
       return request.auth != null &&
         request.auth.uid in foyer.membres &&
         (request.auth.uid == foyer.creePar ||
-          module in foyer.get('modulesParMembre', {}).get(request.auth.uid, []));
+          module in foyer.get('modulesParMembre', {}).get(request.auth.uid, []) ||
+          (demande.get('statut', '') == 'en_attente' &&
+            request.time.toMillis() < demande.get('expiration', 0)));
     }
 
     // Toutes les écritures passent désormais par le backend (SDK Admin, qui

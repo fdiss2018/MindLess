@@ -1,6 +1,6 @@
 export class Foyer {
   constructor({
-    id, nom, membres = [], creePar, dateCreation, modulesParMembre = {},
+    id, nom, membres = [], creePar, dateCreation, modulesParMembre = {}, demandesModules = {},
   } = {}) {
     this.id = id;
     this.nom = nom;
@@ -8,6 +8,7 @@ export class Foyer {
     this.creePar = creePar;
     this.dateCreation = dateCreation;
     this.modulesParMembre = modulesParMembre; // { [uid]: ['voiture', ...] } — voir coeur/utils/Modules.js
+    this.demandesModules = demandesModules; // { [uid]: { [module]: { statut, dateDemande, expiration } } }
   }
 
   static fromFirestore(id, data) {
@@ -21,6 +22,7 @@ export class Foyer {
       creePar: this.creePar,
       dateCreation: this.dateCreation,
       modulesParMembre: this.modulesParMembre,
+      demandesModules: this.demandesModules,
     };
   }
 }
