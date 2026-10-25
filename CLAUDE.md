@@ -204,7 +204,8 @@ Le droit est appliqué à trois niveaux, qui tirent tous leur décision de ces m
 - **Pages** : `index.html` (accueil : tuiles des modules ouverts + Settings + Admin), `login.html`,
   `settings.html` (ex-"Mon foyer", visible de tous : foyer, membres et leurs modules, code
   d'invitation, « Mes modules » pour prendre un module à l'essai, puis une carte de réglages par
-  module ouvert qui en déclare ; sert aussi à créer ou rejoindre un foyer), `admin.html`,
+  module ouvert qui en déclare ; sert aussi à créer ou rejoindre un foyer, après quoi la page se
+  recharge pour rouvrir la session et afficher « Mes modules »), `admin.html`,
   `acces-modules.html`,
   `404.html`
 
