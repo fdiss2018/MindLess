@@ -187,7 +187,8 @@
       try {
         const foyer = await FoyerService.creerFoyer(nom);
         await UtilisateurService.mettreAJourFoyerId(foyer.id);
-        ecouterFoyer(foyer.id);
+        // Recharger rouvre la session : droits, « Mes modules » et réglages des modules s'affichent.
+        window.location.reload();
       } catch (err) {
         afficherMsg(err.message);
       }
@@ -199,7 +200,8 @@
       try {
         const foyer = await FoyerService.rejoindreFoyer(code);
         await UtilisateurService.mettreAJourFoyerId(foyer.id);
-        ecouterFoyer(foyer.id);
+        // Recharger rouvre la session : droits, « Mes modules » et réglages des modules s'affichent.
+        window.location.reload();
       } catch (err) {
         afficherMsg(err.message);
       }
